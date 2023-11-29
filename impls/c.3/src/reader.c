@@ -1,0 +1,571 @@
+#include <ctype.h>
+#include <pcre.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "consts.h"
+#include "printer.h"
+#include "reader.h"
+
+Tokens *tokens_new() {
+  Tokens *tokens = (Tokens *)malloc(sizeof(Tokens));
+  if (tokens == NULL) {
+    perror("Failed to allocate memory for tokens");
+    return NULL;
+  }
+  tokens->buffer = (char **)calloc(BUFFER_SIZE, sizeof(char *));
+  if (tokens->buffer == NULL) {
+    perror("Failed to allocate memory for tokens buffer");
+    tokens_free(tokens);
+    return NULL;
+  }
+  tokens->size = 0;
+  return tokens;
+}
+
+void tokens_free(Tokens *tokens) {
+  for (int i = 0; i < tokens->size; i++) {
+    free(tokens->buffer[i]);
+    tokens->buffer[i] = NULL;
+  }
+  free(tokens->buffer);
+  tokens->buffer = NULL;
+  free(tokens);
+}
+
+int tokens_push(Tokens *tokens, const char *token) {
+  if (tokens->size >= BUFFER_SIZE) {
+    perror("Buffer overflow");
+    return 1;
+  }
+
+  tokens->buffer[tokens->size++] = strdup(token);
+  return 0;
+}
+
+int tokens_pop(Tokens *tokens) {
+  if (tokens->size == 0) {
+    perror("Buffer underflow");
+    return 1;
+  }
+
+  tokens->size--;
+  return 0;
+}
+
+Reader *reader_new(Tokens *tokens) {
+  Reader *reader = (Reader *)malloc(sizeof(Reader));
+  reader->tokens = tokens;
+  reader->position = 0;
+
+  return reader;
+}
+
+void reader_free(Reader *reader) {
+  for (int i = 0; i < reader->tokens->size; i++) {
+    free(reader->tokens->buffer[i]);
+    reader->tokens->buffer[i] = NULL;
+  }
+  tokens_free(reader->tokens);
+  free(reader);
+}
+
+const char *reader_next(Reader *reader) {
+  if (reader->position >= reader->tokens->size) {
+    // EOF
+    return NULL;
+  }
+
+  return reader->tokens->buffer[reader->position++];
+}
+
+const char *reader_peek(const Reader *reader) {
+  if (reader->position >= reader->tokens->size) {
+    // EOF
+    return NULL;
+  }
+
+  return reader->tokens->buffer[reader->position];
+}
+
+MalAtom *read_str(const char *str) {
+  Tokens *tokens = tokenize(str);
+  if (tokens == NULL) {
+    return NULL;
+  }
+  Reader *reader = reader_new(tokens);
+  MalAtom *atom = read_from(reader);
+  reader_free(reader);
+
+  return atom;
+}
+
+static pcre *regex = NULL;
+
+int regex_compile() {
+  const char *error;
+  int error_offset;
+
+  regex = pcre_compile(
+      "[\\s ,]*(~@|[\\[\\]{}()'`~@\\^]|\"(?:[\\\\].|[^\\\\\"])*\"?|;.*|[^\\s "
+      "\\[\\]{}()'\"`~@,;]*)",
+      0, &error, &error_offset, NULL);
+
+  if (regex == NULL) {
+    fprintf(stderr, "PCRE compilation failed at offset %d: %s\n", error_offset,
+            error);
+    return 1;
+  }
+
+  return 0;
+}
+
+void regex_free() { pcre_free(regex); }
+
+Tokens *tokenize(const char *str) {
+  Tokens *tokens = tokens_new();
+  if (tokens == NULL) {
+    return NULL;
+  }
+
+  int offset = 0;
+  int len = strlen(str);
+  while (offset < len) {
+    int ovector[BUFFER_SIZE];
+    int rc = pcre_exec(regex, NULL, str, len, offset, 0, ovector, BUFFER_SIZE);
+    if (rc < 0) {
+      if (rc == PCRE_ERROR_NOMATCH) {
+        fprintf(stderr, "No match found\n");
+      } else {
+        fprintf(stderr, "Matching error %d\n", rc);
+      }
+      return NULL;
+    }
+
+    for (int i = 1; i < rc; i += 2) {
+      int start = ovector[2 * i];
+      int end = ovector[2 * i + 1];
+      int token_len = end - start;
+      char token[token_len + 1];
+      strncpy(token, str + start, token_len);
+      token[token_len] = '\0';
+      if (tokens_push(tokens, token)) {
+        tokens_free(tokens);
+        return NULL;
+      }
+    }
+
+    offset = ovector[1];
+  }
+
+  return tokens;
+}
+
+MalAtom *read_from(Reader *reader) {
+  const char *peek = reader_peek(reader);
+  if (peek != NULL && peek[0] == '(') {
+    reader_next(reader);
+    return read_list(reader);
+  } else {
+    return read_atom(reader);
+  }
+}
+
+MalAtom *read_list(Reader *reader) {
+  MalAtom *list = malatom_new(MAL_ATOM_LIST);
+  MalAtom *tail = NULL;
+
+  while (true) {
+    MalAtom *atom = read_from(reader);
+    if (atom == NULL) {
+      return NULL;
+    }
+    if (atom->type == MAL_EOF) {
+      fprintf(stderr, "Unexpected EOF while reading list\n");
+      malatom_free(atom);
+      return NULL;
+    }
+
+    if (atom->type == MAL_SYMBOL && atom->value.symbol != NULL &&
+        atom->value.symbol[0] == ')') {
+      return list;
+    }
+
+    // Take ownership of the atom.
+    if (list->value.children == NULL) {
+      list->value.children = atom;
+      tail = atom;
+    } else {
+      tail->next = atom;
+      tail = atom;
+    }
+  }
+}
+
+MalAtom *read_atom(Reader *reader) {
+  MalAtom *atom;
+  const char *token = reader_next(reader);
+  if (token == NULL) {
+    atom = malatom_new(MAL_EOF);
+    if (atom == NULL) {
+      return NULL;
+    }
+    return atom;
+  }
+
+  bool is_int = true;
+  for (int i = 0; token[i] != '\0'; i++) {
+    if (!isdigit(token[i])) {
+      is_int = false;
+      break;
+    }
+  }
+
+  if (is_int) {
+    atom = malatom_new(MAL_INT);
+    atom->value.digit = atoi(token);
+    if (atom == NULL) {
+      return NULL;
+    }
+
+  } else if (token[0] == '[') {
+    atom = malatom_new(MAL_VECTOR);
+    MalVector *vector = read_atom_vector(reader);
+    if (vector == NULL) {
+      free(atom);
+      return NULL;
+    }
+    atom->value.vector = vector;
+
+  } else if (token[0] == '^') {
+    atom = read_metadata(reader);
+    if (atom == NULL) {
+      return NULL;
+    }
+
+  } else if (strchr("'`~@", token[0]) != NULL) {
+    atom = read_quotes(reader, token);
+    if (atom == NULL) {
+      return NULL;
+    }
+
+  } else if (token[0] == ':') {
+    atom = malatom_new(MAL_KEYWORD);
+    if (atom == NULL) {
+      return NULL;
+    }
+    atom->value.keyword = strdup(token + 1);
+
+  } else if (token[0] == '{') {
+    atom = malatom_new(MAL_HASHMAP);
+    MalHashmap *map = read_atom_hashmap(reader);
+    if (map == NULL) {
+      free(atom);
+      return NULL;
+    }
+    atom->value.hashmap = map;
+
+  } else if (token[0] == '"') {
+    char *str = read_atom_string(token);
+    if (str == NULL) {
+      return NULL;
+    }
+    atom = malatom_new(MAL_STRING);
+    atom->value.string = str;
+
+  } else if (!strcmp(token, "true") || !strcmp(token, "false")) {
+    atom = malatom_new(MAL_BOOL);
+    atom->value.boolean = !strcmp(token, "true");
+
+  } else if (!strcmp(token, "nil")) {
+    atom = malatom_new(MAL_NIL);
+    atom->value.symbol = NULL;
+
+  } else {
+    atom = malatom_new(MAL_SYMBOL);
+    atom->value.symbol = strdup(token);
+  }
+
+  return atom;
+}
+
+char *read_atom_string(const char *token) {
+  int len = strlen(token);
+  if (len < 2 || token[len - 1] != '"') {
+    fprintf(stderr, "Unexpected EOF while reading string\n");
+    return NULL;
+  }
+  char *str = (char *)calloc(len - 1, sizeof(char));
+  if (str == NULL) {
+    perror("Failed to allocate memory for string");
+    return NULL;
+  }
+  int j = 0;
+  for (int i = 1; i < len - 1; i++) {
+    if (token[i] == '\\') {
+      if (i == len - 2) {
+        fprintf(stderr, "Unexpected EOF while reading string\n");
+        free(str);
+        return NULL;
+      }
+      switch (token[++i]) {
+      case 'n':
+        str[j++] = '\n';
+        break;
+      case 't':
+        str[j++] = '\t';
+        break;
+      case 'r':
+        str[j++] = '\r';
+        break;
+      case 'b':
+        str[j++] = '\b';
+        break;
+      case 'f':
+        str[j++] = '\f';
+        break;
+      case '\\':
+        str[j++] = '\\';
+        break;
+      case '"':
+        str[j++] = '"';
+        break;
+      default:
+        fprintf(stderr, "Unknown escape character: %c\n", token[i]);
+        free(str);
+        return NULL;
+      }
+    } else {
+      str[j++] = token[i];
+    }
+  }
+  str[j] = '\0';
+
+  return str;
+}
+
+MalVector *read_atom_vector(Reader *reader) {
+  MalVector *vector = malvector_new(DEFAULT_CONTAINER_CAPACITY);
+  if (vector == NULL) {
+    return NULL;
+  }
+
+  while (true) {
+    const char *peek = reader_peek(reader);
+    if (peek == NULL) {
+      fprintf(stderr, "Unexpected EOF while reading vector\n");
+      malvector_free(vector);
+      return NULL;
+    }
+    if (peek[0] == ']') {
+      reader_next(reader);
+      return vector;
+    }
+
+    MalAtom *atom = read_from(reader);
+    if (atom == NULL) {
+      malvector_free(vector);
+      return NULL;
+    }
+    if (atom->type == MAL_EOF) {
+      fprintf(stderr, "Unexpected EOF while reading vector\n");
+      malvector_free(vector);
+      malatom_free(atom);
+      return NULL;
+    }
+    if (malvector_push(vector, atom)) {
+      malvector_free(vector);
+      malatom_free(atom);
+      return NULL;
+    }
+  }
+}
+
+MalHashmap *read_atom_hashmap(Reader *reader) {
+  MalHashmap *map = malhashmap_new(DEFAULT_CONTAINER_CAPACITY);
+  if (map == NULL) {
+    return NULL;
+  }
+
+  while (true) {
+    const char *peek = reader_peek(reader);
+    if (peek == NULL) {
+      fprintf(stderr, "Unexpected EOF while reading hashmap\n");
+      malhashmap_free(map);
+      return NULL;
+    }
+    if (peek[0] == '}') {
+      reader_next(reader);
+      return map;
+    }
+
+    MalAtom *key = read_from(reader);
+    if (key == NULL) {
+      malhashmap_free(map);
+      return NULL;
+    }
+    if (key->type == MAL_EOF) {
+      fprintf(stderr, "Unexpected EOF while reading hashmap\n");
+      malhashmap_free(map);
+      malatom_free(key);
+      return NULL;
+    }
+
+    MalAtom *value = read_from(reader);
+    if (value == NULL) {
+      malhashmap_free(map);
+      malatom_free(key);
+      return NULL;
+    }
+    if (value->type == MAL_EOF) {
+      fprintf(stderr, "Unexpected EOF while reading hashmap\n");
+      malhashmap_free(map);
+      malatom_free(key);
+      malatom_free(value);
+      return NULL;
+    }
+
+    if (malhashmap_insert(map, key, value)) {
+      malhashmap_free(map);
+      malatom_free(key);
+      malatom_free(value);
+      return NULL;
+    }
+  }
+}
+
+MalAtom *read_metadata(Reader *reader) {
+  MalAtom *atom = malatom_new(MAL_ATOM_LIST);
+  if (atom == NULL) {
+    return NULL;
+  }
+
+  atom->value.children = malatom_new(MAL_SYMBOL);
+  if (atom->value.children == NULL) {
+    malatom_free(atom);
+    return NULL;
+  }
+  atom->value.children->value.symbol = strdup("with-meta");
+
+  MalAtom *next = read_from(reader);
+  if (next == NULL) {
+    malatom_free(atom);
+    return NULL;
+  }
+  if (next->type == MAL_EOF) {
+    fprintf(stderr, "Unexpected EOF while reading atom\n");
+    malatom_free(atom);
+    malatom_free(next);
+    return NULL;
+  }
+  MalAtom *nnext = read_from(reader);
+  if (nnext == NULL) {
+    malatom_free(atom);
+    malatom_free(next);
+    return NULL;
+  }
+  if (nnext->type == MAL_EOF) {
+    fprintf(stderr, "Unexpected EOF while reading atom\n");
+    malatom_free(atom);
+    malatom_free(next);
+    malatom_free(nnext);
+    return NULL;
+  }
+  atom->value.children->next = nnext;
+  nnext = NULL;
+
+  MalAtom *key, *value;
+  if (next->type == MAL_HASHMAP) {
+    atom->value.children->next->next = next;
+    next = NULL;
+  } else {
+    atom->value.children->next->next = malatom_new(MAL_HASHMAP);
+    if (atom->value.children->next->next == NULL) {
+      perror("Failed to allocate memory for atom");
+      malatom_free(next);
+      malatom_free(atom);
+      return NULL;
+    }
+    atom->value.children->next->next->value.hashmap = malhashmap_new(1);
+    if (atom->value.children->next->next->value.hashmap == NULL) {
+      free(atom->value.children->next->next);
+      malatom_free(next);
+      malatom_free(atom);
+      return NULL;
+    }
+
+    switch (next->type) {
+    case MAL_SYMBOL:
+    case MAL_STRING:
+      key = malatom_new(MAL_KEYWORD);
+      key->value.keyword = strdup("tag");
+      value = next;
+      next = NULL;
+      break;
+    case MAL_KEYWORD:
+      value = malatom_new(MAL_BOOL);
+      value->value.boolean = true;
+      key = next;
+      next = NULL;
+      break;
+    default:
+      fprintf(stderr, "Invalid metadata type\n");
+      malatom_free(atom);
+      malatom_free(next);
+      return NULL;
+    }
+
+    if (malhashmap_insert(atom->value.children->next->next->value.hashmap, key,
+                          value)) {
+      malatom_free(atom);
+      return NULL;
+    }
+  }
+
+  return atom;
+}
+
+MalAtom *read_quotes(Reader *reader, const char *token) {
+  MalAtom *atom = malatom_new(MAL_ATOM_LIST);
+  if (atom == NULL) {
+    return NULL;
+  }
+  atom->value.children = malatom_new(MAL_SYMBOL);
+  switch (token[0]) {
+  case '\'':
+    atom->value.children->value.symbol = strdup("quote");
+    break;
+  case '`':
+    atom->value.children->value.symbol = strdup("quasiquote");
+    break;
+  case '~':
+    if (strlen(token) > 1 && token[1] == '@') {
+      atom->value.children->value.symbol = strdup("splice-unquote");
+    } else {
+      atom->value.children->value.symbol = strdup("unquote");
+    }
+    break;
+  case '@':
+    atom->value.children->value.symbol = strdup("deref");
+    break;
+  default:
+    fprintf(stderr, "Invalid quote type\n");
+    malatom_free(atom);
+    return NULL;
+  }
+  MalAtom *next = read_from(reader);
+  atom->value.children->next = next;
+  if (next == NULL) {
+    malatom_free(atom);
+    return NULL;
+  }
+  if (next->type == MAL_EOF) {
+    fprintf(stderr, "Unexpected EOF while reading atom\n");
+    malatom_free(atom);
+    return NULL;
+  }
+
+  return atom;
+}
