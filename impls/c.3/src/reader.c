@@ -18,7 +18,7 @@ Token *token_new(const char *str) {
   token->str = strdup(str);
   if (token->str == NULL) {
     perror("Failed to allocate memory for token string");
-    free(token);
+    token_free(token);
     return NULL;
   }
   token->next = NULL;
@@ -27,8 +27,12 @@ Token *token_new(const char *str) {
 }
 
 void token_free(Token *token) {
-  free(token->str);
-  free(token);
+  if (token != NULL) {
+    if (token->str != NULL) {
+      free(token->str);
+    }
+    free(token);
+  }
 }
 
 Tokens *tokens_new() {
@@ -82,8 +86,12 @@ Reader *reader_new(Tokens *tokens) {
 }
 
 void reader_free(Reader *reader) {
-  tokens_free(reader->tokens);
-  free(reader);
+  if (reader != NULL) {
+    if (reader->tokens != NULL) {
+      tokens_free(reader->tokens);
+    }
+    free(reader);
+  }
 }
 
 const char *reader_next(Reader *reader) {
@@ -157,6 +165,7 @@ Tokens *tokenize(const char *str) {
       } else {
         fprintf(stderr, "Matching error %d\n", rc);
       }
+      tokens_free(tokens);
       return NULL;
     }
 
@@ -196,6 +205,7 @@ MalAtom *read_list(Reader *reader) {
   while (true) {
     MalAtom *atom = read_from(reader);
     if (atom == NULL) {
+      malatom_free(list);
       return NULL;
     }
     if (atom->type == MAL_EOF) {
@@ -241,16 +251,19 @@ MalAtom *read_atom(Reader *reader) {
 
   if (is_int) {
     atom = malatom_new(MAL_INT);
-    atom->value.digit = atoi(token);
     if (atom == NULL) {
       return NULL;
     }
+    atom->value.digit = atoi(token);
 
   } else if (token[0] == '[') {
     atom = malatom_new(MAL_VECTOR);
+    if (atom == NULL) {
+      return NULL;
+    }
     MalVector *vector = read_atom_vector(reader);
     if (vector == NULL) {
-      free(atom);
+      malatom_free(atom);
       return NULL;
     }
     atom->value.vector = vector;
@@ -278,7 +291,7 @@ MalAtom *read_atom(Reader *reader) {
     atom = malatom_new(MAL_HASHMAP);
     MalHashmap *map = read_atom_hashmap(reader);
     if (map == NULL) {
-      free(atom);
+      malatom_free(atom);
       return NULL;
     }
     atom->value.hashmap = map;
@@ -289,18 +302,31 @@ MalAtom *read_atom(Reader *reader) {
       return NULL;
     }
     atom = malatom_new(MAL_STRING);
+    if (atom == NULL) {
+      free(str);
+      return NULL;
+    }
     atom->value.string = str;
 
   } else if (!strcmp(token, "true") || !strcmp(token, "false")) {
     atom = malatom_new(MAL_BOOL);
+    if (atom == NULL) {
+      return NULL;
+    }
     atom->value.boolean = !strcmp(token, "true");
 
   } else if (!strcmp(token, "nil")) {
     atom = malatom_new(MAL_NIL);
+    if (atom == NULL) {
+      return NULL;
+    }
     atom->value.symbol = NULL;
 
   } else {
     atom = malatom_new(MAL_SYMBOL);
+    if (atom == NULL) {
+      return NULL;
+    }
     atom->value.symbol = strdup(token);
   }
 
@@ -506,7 +532,6 @@ MalAtom *read_metadata(Reader *reader) {
     }
     atom->value.children->next->next->value.hashmap = malhashmap_new(1);
     if (atom->value.children->next->next->value.hashmap == NULL) {
-      free(atom->value.children->next->next);
       malatom_free(next);
       malatom_free(atom);
       return NULL;

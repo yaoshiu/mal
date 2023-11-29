@@ -43,21 +43,35 @@ MalAtom *malatom_new(const MalType type) {
 }
 
 void malatom_free(MalAtom *atom) {
+  if (atom == NULL) {
+    return;
+  }
   switch (atom->type) {
   case MAL_SYMBOL:
+    if (atom->value.symbol == NULL) {
+      break;
+    }
     free(atom->value.symbol);
     atom->value.symbol = NULL;
     break;
   case MAL_STRING:
+    if (atom->value.string == NULL) {
+      break;
+    }
     free(atom->value.string);
     atom->value.string = NULL;
     break;
   case MAL_ATOM_LIST:
-    if (atom->value.children != NULL) {
-      malatom_free(atom->value.children);
+    if (atom->value.children == NULL) {
+      break;
     }
+    malatom_free(atom->value.children);
+    atom->value.children = NULL;
     break;
   case MAL_KEYWORD:
+    if (atom->value.keyword == NULL) {
+      break;
+    }
     free(atom->value.keyword);
     atom->value.keyword = NULL;
     break;
@@ -81,7 +95,6 @@ void malatom_free(MalAtom *atom) {
   }
 
   free(atom);
-  atom = NULL;
 }
 
 MalVector *malvector_new(const int capacity) {
@@ -102,10 +115,15 @@ MalVector *malvector_new(const int capacity) {
 }
 
 void malvector_free(MalVector *vector) {
-  for (int i = 0; i < vector->size; i++) {
-    malatom_free(vector->buffer[i]);
+  if (vector == NULL) {
+    return;
   }
-  free(vector->buffer);
+  if (vector->buffer != NULL) {
+    for (int i = 0; i < vector->size; i++) {
+      malatom_free(vector->buffer[i]);
+    }
+    free(vector->buffer);
+  }
   free(vector);
 }
 
@@ -124,6 +142,7 @@ int malvoctor_set(MalVector *vector, const int index, MalAtom *atom) {
   if (index < 0 || index >= vector->size) {
     fprintf(stderr, "Index %d out of bounds for vector of size %d\n", index,
             vector->size);
+    malatom_free(atom);
     return 1;
   }
 
@@ -147,6 +166,7 @@ int malvector_resize(MalVector *vector, const int capacity) {
 int malvector_push(MalVector *vector, MalAtom *atom) {
   if (vector->size >= vector->capacity) {
     if (malvector_resize(vector, vector->capacity * 2)) {
+      malatom_free(atom);
       return 1;
     }
   }
@@ -188,31 +208,28 @@ MalHashmap *malhashmap_new(const int capacity) {
     return NULL;
   }
 
-  hashmap->head = (MalHashentry *)malloc(sizeof(MalHashentry));
-  if (hashmap->head == NULL) {
-    perror("Failed to allocate memory for hashmap head");
-    free(hashmap->buffer);
-    free(hashmap);
-    return NULL;
-  }
-  hashmap->head->next = NULL;
+  hashmap->head = NULL;
 
   return hashmap;
 }
 
 void malhashmap_free(MalHashmap *hashmap) {
-  for (MalHashentry *entry = hashmap->head->next, *next; entry != NULL;
-       entry = next) {
-    malatom_free(entry->key);
-    entry->key = NULL;
-    malatom_free(entry->value);
-    entry->value = NULL;
-    next = entry->next;
-    free(entry);
+  if (hashmap == NULL) {
+    return;
+  }
+  if (hashmap->head != NULL) {
+    for (MalHashentry *entry = hashmap->head, *next; entry != NULL;
+         entry = next) {
+      malatom_free(entry->key);
+      entry->key = NULL;
+      malatom_free(entry->value);
+      entry->value = NULL;
+      next = entry->next;
+      free(entry);
+    }
+    free(hashmap->buffer);
   }
 
-  free(hashmap->head);
-  free(hashmap->buffer);
   free(hashmap);
 }
 
@@ -220,6 +237,10 @@ int malhashmap_resize(MalHashmap *hashmap, const int capacity) {
   MalHashentry **old_buffer = hashmap->buffer;
   MalHashentry *old_head = hashmap->head;
 
+  if (hashmap == NULL) {
+    fprintf(stderr, "Cannot resize NULL hashmap\n");
+    return 1;
+  }
   hashmap->capacity = capacity;
   hashmap->size = 0;
   hashmap->buffer = (MalHashentry **)calloc(capacity, sizeof(MalHashentry *));
@@ -228,23 +249,14 @@ int malhashmap_resize(MalHashmap *hashmap, const int capacity) {
     hashmap->buffer = old_buffer;
     return 1;
   }
-  hashmap->head = (MalHashentry *)malloc(sizeof(MalHashentry));
-  if (hashmap->head == NULL) {
-    perror("Failed to allocate memory for hashmap head");
-    free(hashmap->buffer);
-    hashmap->buffer = old_buffer;
-    hashmap->head = old_head;
-    return 1;
-  }
-  hashmap->head->next = NULL;
-  for (MalHashentry *entry = old_head->next, *next; entry != NULL;
-       entry = next) {
+  hashmap->head = NULL;
+  for (MalHashentry *entry = old_head, *next; entry != NULL; entry = next) {
+    // TODO: Check for errors
     malhashmap_insert(hashmap, entry->key, entry->value);
     next = entry->next;
     free(entry);
   }
   free(old_buffer);
-  free(old_head);
 
   return 0;
 }
@@ -259,26 +271,42 @@ uint32_t hash(const char *key, const uint8_t seed[16]) {
 int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *value) {
   if (hashmap->size >= hashmap->capacity * LOAD_FACTOR) {
     if (malhashmap_resize(hashmap, hashmap->capacity * 2)) {
+      malatom_free(key);
+      malatom_free(value);
       return 1;
     }
   }
+
   MalHashentry *entry = (MalHashentry *)malloc(sizeof(MalHashentry));
   if (entry == NULL) {
     perror("Failed to allocate memory for hashmap entry");
+    malatom_free(key);
+    malatom_free(value);
     return 1;
   }
   entry->key = key;
+  key = NULL;
   entry->value = value;
+  value = NULL;
   entry->psl = 0;
   entry->next = NULL;
+
   MalHashentry *tmp = entry;
-  char *key_str = pr_str(key, false);
+  char *key_str = pr_str(entry->key, false);
+  if (key_str == NULL) {
+    malatom_free(entry->key);
+    malatom_free(entry->value);
+    free(entry);
+    return 1;
+  }
 
   uint32_t index = hash(key_str, hashmap->key) % hashmap->capacity;
   while (hashmap->buffer[index] != NULL) {
     char *index_key = pr_str(hashmap->buffer[index]->key, false);
     if (strcmp(index_key, key_str) == 0) {
       hashmap->buffer[index]->value = value;
+      malatom_free(entry->key);
+      malatom_free(entry->value);
       free(entry);
       return 0;
     }
@@ -295,8 +323,12 @@ int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *value) {
   }
   free(key_str);
 
-  tmp->next = hashmap->head->next;
-  hashmap->head->next = tmp;
+  if (hashmap->head == NULL) {
+    hashmap->head = tmp;
+  } else {
+    tmp->next = hashmap->head;
+    hashmap->head = tmp;
+  }
 
   hashmap->buffer[index] = entry;
   hashmap->size++;
