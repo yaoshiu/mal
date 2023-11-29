@@ -3,34 +3,53 @@
 
 #include "types.h"
 
+typedef struct Token {
+  struct Token *next, *prev;
+  char *str;
+} Token;
+
+// Create a new `Token` object.
+//
+// The token should be freed with `token_free`.
+Token *token_new(const char *str);
+
+// Free a `Token` object.
+//
+// Take the `token` ownership.
+void token_free(Token *token);
+
 typedef struct Tokens {
-  char **buffer;
-  int size;
+  Token *head, *tail;
 } Tokens;
 
+// Compile the regex.
+//
+// Return 0 on success, -1 on failure.
+// The regex should be freed with `regex_free`.
 int regex_compile();
 
+// Free the regex.
 void regex_free();
 
-// Create a new Tokens object.
+// Create a new `Tokens` object.
 //
-// The tokens should be freed with tokens_free().
+// The `tokens` should be freed with `tokens_free()`.
 Tokens *tokens_new();
 
-// Free a Tokens object.
+// Free a `Tokens` object.
 //
-// Took the tokens ownership.
+// Took the `tokens` ownership.
 void tokens_free(Tokens *tokens);
 
-// Add a new token (copy) to the end of tokens.
+// Add a new `token` (copy) to the end of `tokens`.
 int tokens_push(Tokens *tokens, const char *token);
 
-// Remove the last token from tokens.
+// Remove the last token from `tokens`.
 int tokens_pop(Tokens *tokens);
 
 typedef struct Reader {
   Tokens *tokens;
-  int position;
+  Token *current;
 } Reader;
 
 // Create a new `Reader` object.

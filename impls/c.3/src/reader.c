@@ -9,85 +9,101 @@
 #include "printer.h"
 #include "reader.h"
 
+Token *token_new(const char *str) {
+  Token *token = (Token *)malloc(sizeof(Token));
+  if (token == NULL) {
+    perror("Failed to allocate memory for token");
+    return NULL;
+  }
+  token->str = strdup(str);
+  if (token->str == NULL) {
+    perror("Failed to allocate memory for token string");
+    free(token);
+    return NULL;
+  }
+  token->next = NULL;
+  token->prev = NULL;
+  return token;
+}
+
+void token_free(Token *token) {
+  free(token->str);
+  free(token);
+}
+
 Tokens *tokens_new() {
   Tokens *tokens = (Tokens *)malloc(sizeof(Tokens));
   if (tokens == NULL) {
     perror("Failed to allocate memory for tokens");
     return NULL;
   }
-  tokens->buffer = (char **)calloc(BUFFER_SIZE, sizeof(char *));
-  if (tokens->buffer == NULL) {
-    perror("Failed to allocate memory for tokens buffer");
-    tokens_free(tokens);
-    return NULL;
-  }
-  tokens->size = 0;
+  tokens->head = NULL;
+  tokens->tail = NULL;
   return tokens;
 }
 
 void tokens_free(Tokens *tokens) {
-  for (int i = 0; i < tokens->size; i++) {
-    free(tokens->buffer[i]);
-    tokens->buffer[i] = NULL;
+  Token *token = tokens->head;
+  while (token != NULL) {
+    Token *next = token->next;
+    token_free(token);
+    token = next;
   }
-  free(tokens->buffer);
-  tokens->buffer = NULL;
   free(tokens);
 }
 
 int tokens_push(Tokens *tokens, const char *token) {
-  if (tokens->size >= BUFFER_SIZE) {
-    perror("Buffer overflow");
+  Token *new_token = token_new(token);
+  if (new_token == NULL) {
     return 1;
   }
 
-  tokens->buffer[tokens->size++] = strdup(token);
-  return 0;
-}
-
-int tokens_pop(Tokens *tokens) {
-  if (tokens->size == 0) {
-    perror("Buffer underflow");
-    return 1;
+  if (tokens->head == NULL) {
+    tokens->head = new_token;
+    tokens->tail = new_token;
+  } else {
+    tokens->tail->next = new_token;
+    new_token->prev = tokens->tail;
+    tokens->tail = new_token;
   }
 
-  tokens->size--;
   return 0;
 }
 
 Reader *reader_new(Tokens *tokens) {
   Reader *reader = (Reader *)malloc(sizeof(Reader));
+  if (reader == NULL) {
+    perror("Failed to allocate memory for reader");
+    return NULL;
+  }
   reader->tokens = tokens;
-  reader->position = 0;
-
+  reader->current = tokens->head;
   return reader;
 }
 
 void reader_free(Reader *reader) {
-  for (int i = 0; i < reader->tokens->size; i++) {
-    free(reader->tokens->buffer[i]);
-    reader->tokens->buffer[i] = NULL;
-  }
   tokens_free(reader->tokens);
   free(reader);
 }
 
 const char *reader_next(Reader *reader) {
-  if (reader->position >= reader->tokens->size) {
+  if (reader->current == NULL) {
     // EOF
     return NULL;
   }
 
-  return reader->tokens->buffer[reader->position++];
+  const char *token = reader->current->str;
+  reader->current = reader->current->next;
+  return token;
 }
 
 const char *reader_peek(const Reader *reader) {
-  if (reader->position >= reader->tokens->size) {
+  if (reader->current == NULL) {
     // EOF
     return NULL;
   }
 
-  return reader->tokens->buffer[reader->position];
+  return reader->current->str;
 }
 
 MalAtom *read_str(const char *str) {
