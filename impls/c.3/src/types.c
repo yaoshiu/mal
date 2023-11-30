@@ -33,6 +33,9 @@ MalAtom *malatom_new(const MalType type) {
   case MAL_HASHMAP:
     atom->value.hashmap = NULL;
     break;
+  case MAL_FUNCTION:
+    atom->value.function = NULL;
+    break;
   case MAL_BOOL:
   case MAL_EOF:
   case MAL_INT:
@@ -65,7 +68,11 @@ void malatom_free(MalAtom *atom) {
     if (atom->value.children == NULL) {
       break;
     }
-    malatom_free(atom->value.children);
+    for (MalAtom *child = atom->value.children, *next; child != NULL;
+         child = next) {
+      next = child->next;
+      malatom_free(child);
+    }
     break;
   case MAL_KEYWORD:
     if (atom->value.keyword == NULL) {
@@ -86,11 +93,8 @@ void malatom_free(MalAtom *atom) {
   case MAL_EOF:
   case MAL_INT:
   case MAL_NIL:
+  case MAL_FUNCTION:
     break;
-  }
-
-  if (atom->next != NULL) {
-    malatom_free(atom->next);
   }
 
   free(atom);

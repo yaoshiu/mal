@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 typedef enum MalType {
+  MAL_FUNCTION,
   MAL_ATOM_LIST,
   MAL_BOOL,
   MAL_EOF,
@@ -20,11 +21,12 @@ typedef enum MalType {
 typedef struct MalAtom {
   MalType type;
   union MalValue {
-    int digit;
+    int integer;
     char *symbol;
     char *keyword;
     char *string;
     bool boolean;
+    void *function;
     struct MalVector *vector;
     struct MalHashmap *hashmap;
     struct MalAtom *children;

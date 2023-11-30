@@ -23,7 +23,7 @@ char *pr_str(const MalAtom *atom, const bool print_readably) {
       perror("Failed to allocate memory for int");
       break;
     }
-    sprintf(str, "%d", atom->value.digit);
+    sprintf(str, "%d", atom->value.integer);
     break;
 
   case MAL_EOF:
@@ -143,6 +143,9 @@ char *pr_str(const MalAtom *atom, const bool print_readably) {
       }
     }
     strcat(str, "}");
+    break;
+  case MAL_FUNCTION:
+    str = strdup("<function>");
     break;
   }
 
