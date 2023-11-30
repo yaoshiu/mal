@@ -115,6 +115,10 @@ const char *reader_peek(const Reader *reader) {
 }
 
 MalAtom *read_str(const char *str) {
+  if (str == NULL) {
+    MalAtom *atom = malatom_new(MAL_EOF);
+    return atom;
+  }
   Tokens *tokens = tokenize(str);
   if (tokens == NULL) {
     return NULL;
@@ -190,9 +194,22 @@ Tokens *tokenize(const char *str) {
 
 MalAtom *read_from(Reader *reader) {
   const char *peek = reader_peek(reader);
-  if (peek != NULL && peek[0] == '(') {
+  if (peek == NULL) {
+    MalAtom *atom = malatom_new(MAL_EOF);
+    return atom;
+  }
+
+  if (peek[0] == '(') {
     reader_next(reader);
     return read_list(reader);
+
+  } else if (strchr(")]}", peek[0]) != NULL) {
+    fprintf(stderr, "Unexpected %c\n", peek[0]);
+    return NULL;
+
+  } else if (peek[0] == ';') {
+    return NULL;
+
   } else {
     return read_atom(reader);
   }
@@ -203,6 +220,17 @@ MalAtom *read_list(Reader *reader) {
   MalAtom *tail = NULL;
 
   while (true) {
+    const char *peek = reader_peek(reader);
+    if (peek == NULL) {
+      fprintf(stderr, "Unexpected EOF while reading list\n");
+      malatom_free(list);
+      return NULL;
+    }
+    if (peek[0] == ')') {
+      reader_next(reader);
+      return list;
+    }
+
     MalAtom *atom = read_from(reader);
     if (atom == NULL) {
       malatom_free(list);
@@ -211,12 +239,8 @@ MalAtom *read_list(Reader *reader) {
     if (atom->type == MAL_EOF) {
       fprintf(stderr, "Unexpected EOF while reading list\n");
       malatom_free(atom);
+      malatom_free(list);
       return NULL;
-    }
-
-    if (atom->type == MAL_SYMBOL && atom->value.symbol != NULL &&
-        atom->value.symbol[0] == ')') {
-      return list;
     }
 
     // Take ownership of the atom.
@@ -233,16 +257,9 @@ MalAtom *read_list(Reader *reader) {
 MalAtom *read_atom(Reader *reader) {
   MalAtom *atom;
   const char *token = reader_next(reader);
-  if (token == NULL) {
-    atom = malatom_new(MAL_EOF);
-    if (atom == NULL) {
-      return NULL;
-    }
-    return atom;
-  }
 
   bool is_int = true;
-  for (int i = 0; token[i] != '\0'; i++) {
+  for (int i = (token[0] == '-'); token[i] != '\0'; i++) {
     if (!isdigit(token[i])) {
       is_int = false;
       break;
@@ -425,6 +442,8 @@ MalVector *read_atom_vector(Reader *reader) {
   }
 }
 
+void malatom_free_wrapper(void *atom) { malatom_free((MalAtom *)atom); }
+
 MalHashmap *read_atom_hashmap(Reader *reader) {
   MalHashmap *map = malhashmap_new(DEFAULT_CONTAINER_CAPACITY);
   if (map == NULL) {
@@ -469,9 +488,10 @@ MalHashmap *read_atom_hashmap(Reader *reader) {
       return NULL;
     }
 
-    if (malhashmap_insert(map, key, value)) {
+    char *key_str = pr_str(key, true);
+    malatom_free(key);
+    if (malhashmap_insert(map, key_str, (void *)value, malatom_free_wrapper)) {
       malhashmap_free(map);
-      malatom_free(key);
       malatom_free(value);
       return NULL;
     }
@@ -558,8 +578,9 @@ MalAtom *read_metadata(Reader *reader) {
       return NULL;
     }
 
-    if (malhashmap_insert(atom->value.children->next->next->value.hashmap, key,
-                          value)) {
+    char *key_str = pr_str(key, true);
+    if (malhashmap_insert(atom->value.children->next->next->value.hashmap,
+                          key_str, value, malatom_free_wrapper)) {
       malatom_free(atom);
       return NULL;
     }

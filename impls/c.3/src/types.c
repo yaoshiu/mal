@@ -66,7 +66,6 @@ void malatom_free(MalAtom *atom) {
       break;
     }
     malatom_free(atom->value.children);
-    atom->value.children = NULL;
     break;
   case MAL_KEYWORD:
     if (atom->value.keyword == NULL) {
@@ -187,6 +186,34 @@ int malvector_pop(MalVector *vector) {
   return 0;
 }
 
+MalHashentry *malhashentry_new(char *key, void *atom,
+                               void (*free_value)(void *)) {
+  MalHashentry *entry = (MalHashentry *)malloc(sizeof(MalHashentry));
+  if (entry == NULL) {
+    perror("Failed to allocate memory for hashmap entry");
+    free(key);
+    free_value(atom);
+    return NULL;
+  }
+  entry->key = key;
+  entry->value = atom;
+  entry->psl = 0;
+  entry->next = NULL;
+  entry->free_value = free_value;
+  return entry;
+}
+
+void malhashentry_free(MalHashentry *entry) {
+  if (entry == NULL) {
+    return;
+  }
+  free(entry->key);
+  entry->key = NULL;
+  entry->free_value(entry->value);
+  entry->value = NULL;
+  free(entry);
+}
+
 MalHashmap *malhashmap_new(const int capacity) {
   MalHashmap *hashmap = (MalHashmap *)malloc(sizeof(MalHashmap));
   if (hashmap == NULL) {
@@ -220,12 +247,8 @@ void malhashmap_free(MalHashmap *hashmap) {
   if (hashmap->head != NULL) {
     for (MalHashentry *entry = hashmap->head, *next; entry != NULL;
          entry = next) {
-      malatom_free(entry->key);
-      entry->key = NULL;
-      malatom_free(entry->value);
-      entry->value = NULL;
       next = entry->next;
-      free(entry);
+      malhashentry_free(entry);
     }
     free(hashmap->buffer);
   }
@@ -250,11 +273,15 @@ int malhashmap_resize(MalHashmap *hashmap, const int capacity) {
     return 1;
   }
   hashmap->head = NULL;
-  for (MalHashentry *entry = old_head, *next; entry != NULL; entry = next) {
+  for (MalHashentry *current = old_head, *next; current != NULL;
+       current = next) {
     // TODO: Check for errors
-    malhashmap_insert(hashmap, entry->key, entry->value);
-    next = entry->next;
-    free(entry);
+    malhashmap_insert(hashmap, current->key, current->value,
+                      current->free_value);
+
+    next = current->next;
+
+    free(current);
   }
   free(old_buffer);
 
@@ -268,50 +295,34 @@ uint32_t hash(const char *key, const uint8_t seed[16]) {
   return *(uint32_t *)out;
 }
 
-int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *value) {
+int malhashmap_insert(MalHashmap *hashmap, char *key, void *value,
+                      void (*free_value)(void *)) {
   if (hashmap->size >= hashmap->capacity * LOAD_FACTOR) {
     if (malhashmap_resize(hashmap, hashmap->capacity * 2)) {
-      malatom_free(key);
-      malatom_free(value);
+      free(key);
+      free_value(value);
       return 1;
     }
   }
 
-  MalHashentry *entry = (MalHashentry *)malloc(sizeof(MalHashentry));
+  MalHashentry *entry = malhashentry_new(key, value, free_value);
   if (entry == NULL) {
-    perror("Failed to allocate memory for hashmap entry");
-    malatom_free(key);
-    malatom_free(value);
     return 1;
   }
-  entry->key = key;
   key = NULL;
-  entry->value = value;
   value = NULL;
-  entry->psl = 0;
-  entry->next = NULL;
 
   MalHashentry *tmp = entry;
-  char *key_str = pr_str(entry->key, false);
-  if (key_str == NULL) {
-    malatom_free(entry->key);
-    malatom_free(entry->value);
-    free(entry);
-    return 1;
-  }
 
-  uint32_t index = hash(key_str, hashmap->key) % hashmap->capacity;
+  uint32_t index = hash(entry->key, hashmap->key) % hashmap->capacity;
   while (hashmap->buffer[index] != NULL) {
-    char *index_key = pr_str(hashmap->buffer[index]->key, false);
-    if (strcmp(index_key, key_str) == 0) {
-      hashmap->buffer[index]->value = value;
-      malatom_free(entry->key);
-      malatom_free(entry->value);
+    char *index_key = hashmap->buffer[index]->key;
+    if (strcmp(index_key, entry->key) == 0) {
+      hashmap->buffer[index]->value = entry->value;
+      free(entry->key);
       free(entry);
       return 0;
     }
-    free(index_key);
-    index_key = NULL;
 
     if (hashmap->buffer[index]->psl < entry->psl) {
       MalHashentry *temp = hashmap->buffer[index];
@@ -321,7 +332,6 @@ int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *value) {
     index = (index + 1) % hashmap->capacity;
     entry->psl++;
   }
-  free(key_str);
 
   if (hashmap->head == NULL) {
     hashmap->head = tmp;
@@ -335,16 +345,13 @@ int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *value) {
   return 0;
 }
 
-const MalAtom *malhashmap_get(const MalHashmap *hashmap, const MalAtom *key) {
-  char *key_str = pr_str(key, false);
-  uint32_t index = hash(key_str, hashmap->key) % hashmap->capacity;
+const void *malhashmap_get(const MalHashmap *hashmap, const char *key) {
+  uint32_t index = hash(key, hashmap->key) % hashmap->capacity;
   while (hashmap->buffer[index] != NULL) {
-    char *index_key = pr_str(hashmap->buffer[index]->key, false);
-    if (strcmp(index_key, key_str) == 0) {
+    char *index_key = hashmap->buffer[index]->key;
+    if (strcmp(index_key, key) == 0) {
       return hashmap->buffer[index]->value;
     }
-    free(index_key);
-    index_key = NULL;
 
     index = (index + 1) % hashmap->capacity;
   }

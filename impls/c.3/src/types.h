@@ -79,11 +79,25 @@ int malvector_pop(MalVector *vector);
 const MalAtom *malvector_get(const MalVector *vector, const int index);
 
 typedef struct MalHashentry {
-  MalAtom *key;
-  MalAtom *value;
+  char *key;
+  void *value;
+  void (*free_value)(void *);
   int psl;
   struct MalHashentry *next;
 } MalHashentry;
+
+// Create a new `MalHashentry`
+//
+// The `MalHashentry` should be freed with `malhashentry_free` by the caller.
+// The `key` passed in should not be freed by the caller.
+// The `value` passed in should not be freed by the caller.
+MalHashentry *malhashentry_new(char *key, void *value,
+                               void (*free_value)(void *));
+
+// Free a `MalHashentry`
+// The `value` will be freed by the `free_value` function passed in when the
+// `MalHashentry` was created.
+void malhashentry_free(MalHashentry *hashentry);
 
 typedef struct MalHashmap {
   int capacity;
@@ -106,14 +120,15 @@ void malhashmap_free(MalHashmap *hashmap);
 
 // Insert a `MalAtom` into a `MalHashmap` at a given key
 //
-// Takes ownership of the `MalAtom` passed in. Which means that the caller
-// should only use `malhashmap_free` to free the `MalAtom` passed in.
-int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *atom);
+// The `key` passed in should not be freed by the caller.
+// The `value` passed in should not be freed by the caller.
+int malhashmap_insert(MalHashmap *hashmap, char *key, void *value,
+                      void (*free_value)(void *));
 
 // Get the value of a `MalHashmap` at a given key
 //
 // The `MalAtom` returned should not be freed by the caller.
-const MalAtom *malhashmap_get(const MalHashmap *hashmap, const MalAtom *key);
+const void *malhashmap_get(const MalHashmap *hashmap, const char *key);
 
 // Resize a `MalHashmap`
 int malhashmap_resize(MalHashmap *hashmap, const int capacity);

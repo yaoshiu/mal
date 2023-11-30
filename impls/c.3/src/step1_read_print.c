@@ -16,34 +16,46 @@ MalAtom *READ(const char *str) { return read_str(str); }
 
 MalAtom *EVAL(MalAtom *atom) { return atom; }
 
-// Frees the atom.
+// Print a MalAtom and return a string
+//
+// The returned string should be freed by the caller.
 char *PRINT(MalAtom *atom) {
-  char *str = pr_str(atom, true);
   if (atom == NULL) {
     return NULL;
   }
+  char *str = pr_str(atom, true);
   malatom_free(atom);
   return str;
 }
 
-char *rep(char *str) { return PRINT(EVAL(READ(str))); }
+// Read a str, evaluate it, print the result and return a string
+//
+// The returned string should be freed by the caller.
+char *rep(const char *str) { return PRINT(EVAL(READ(str))); }
 
 int main(int argc, char **argv) {
-  char *input;
   if (regex_compile()) {
     return 1;
   }
 
   while (1) {
-    input = readline(PROMPT);
+    const char *input = readline(PROMPT);
+    if (input == NULL) {
+      break;
+    }
     add_history(input);
-    char *output = rep(input);
+    const char *output = rep(input);
+    free((void *)input);
     if (output == NULL) {
       continue;
     }
     printf("%s\n", output);
+    if (output[0] == '\0') {
+      free((void *)output);
+      break;
+    }
+    free((void *)output);
   }
-  free(input);
   regex_free();
 
   return 0;
