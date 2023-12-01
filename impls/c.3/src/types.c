@@ -101,6 +101,11 @@ void malatom_free(MalAtom *atom) {
 }
 
 MalVector *malvector_new(const int capacity) {
+  if (capacity <= 0) {
+    fprintf(stderr, "Cannot create vector with capacity %d\n", capacity);
+    return NULL;
+  }
+
   MalVector *vector = (MalVector *)malloc(sizeof(MalVector));
   if (vector == NULL) {
     perror("Failed to allocate memory for vector");
@@ -141,7 +146,7 @@ const MalAtom *malvector_get(const MalVector *vector, const int index) {
   return vector->buffer[index];
 }
 
-int malvoctor_set(MalVector *vector, const int index, MalAtom *atom) {
+int malvector_set(MalVector *vector, const int index, MalAtom *atom) {
   if (index < 0 || index >= vector->size) {
     fprintf(stderr, "Index %d out of bounds for vector of size %d\n", index,
             vector->size);
@@ -219,6 +224,11 @@ void malhashentry_free(MalHashentry *entry) {
 }
 
 MalHashmap *malhashmap_new(const int capacity) {
+  if (capacity <= 0) {
+    fprintf(stderr, "Cannot create hashmap with capacity %d\n", capacity);
+    return NULL;
+  }
+
   MalHashmap *hashmap = (MalHashmap *)malloc(sizeof(MalHashmap));
   if (hashmap == NULL) {
     perror("Failed to allocate memory for hashmap");

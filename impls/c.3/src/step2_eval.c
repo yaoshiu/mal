@@ -16,12 +16,31 @@
 // The returned `MalAtom` should be freed by the caller.
 MalAtom *READ(const char *str) { return read_str(str); }
 
-// Evaluate a `MalAtom` and return a `MalAtom`
+// Evaluates the given `MalAtom` in the provided environment.
 //
-// The returned `MalAtom` should be freed by the caller.
-// Takes ownership of the `atom` and `repl_env`. The caller should not free it.
+// Takes ownership of the input `atom` - responsibility for freeing is
+// transferred to this function. The caller should not free atom after
+// passing to `EVAL`.
+//
+// Also takes a reference to the `repl_env` map. Responsibility for freeing
+// `repl_env` remains with the caller.
+//
+// Returns a new `MalAtom` representing the evaluated result. The caller is
+// responsible for freeing the returned atom by calling `malatom_free()`
+// when no longer needed.
 MalAtom *EVAL(MalAtom *atom, const MalHashmap *repl_env);
 
+// Evaluates the given AST in the provided environment map.
+//
+// The responsibility for freeing the input `ast` is transferred to this
+// function. The caller should not free ast after passing it in.
+//
+// Returns a new `MalAtom` representing the evaluation result. The returned
+// atom is allocated within this function and the caller is responsible
+// for freeing it with `malatom_free()` when no longer needed.
+//
+// The `repl_env` map is borrowed during execution. Responsibility for
+// freeing `repl_env` remains with the caller.
 MalAtom *eval_ast(MalAtom *ast, const MalHashmap *repl_env) {
   if (ast == NULL) {
     return NULL;

@@ -60,7 +60,7 @@ void malvector_free(MalVector *vector);
 //
 // Takes ownership of the `MalAtom` passed in. Which means that the caller
 // should only use `malvector_free` to free the `MalAtom` passed in.
-int malvoctor_set(MalVector *vector, const int index, MalAtom *atom);
+int malvector_set(MalVector *vector, const int index, MalAtom *atom);
 
 // Resize a `MalVector`
 int malvector_resize(MalVector *vector, const int capacity);
