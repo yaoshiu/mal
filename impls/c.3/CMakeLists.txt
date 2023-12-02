@@ -54,3 +54,8 @@ target_link_libraries(step1_read_print PRIVATE ${LIBRARIES})
 
 add_executable(step2_eval src/step2_eval.c ${LOCAL_LIBRARIES})
 target_link_libraries(step2_eval PRIVATE ${LIBRARIES})
+
+list(APPEND LOCAL_LIBRARIES src/env.c src/step3_env.c)
+
+add_executable(step3_env src/step3_env.c ${LOCAL_LIBRARIES})
+target_link_libraries(step3_env PRIVATE ${LIBRARIES})

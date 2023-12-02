@@ -7,6 +7,7 @@ pkgs.mkShell {
   ];
 
   nativeBuildInputs = [
+    pkgs.clang-analyzer
     pkgs.cmake
     pkgs.valgrind
   ];
