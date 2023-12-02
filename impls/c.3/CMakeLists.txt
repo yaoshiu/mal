@@ -19,43 +19,24 @@ else()
   message(STATUS "Debug disabled")
 endif()
 
-find_library(READLINE_LIBRARY NAMES readline)
-if(READLINE_LIBRARY)
-  message(STATUS "Found GNU Readline: ${READLINE_LIBRARY}")
-else()
-  message(FATAL_ERROR "GNU Readline library not found")
-endif()
+find_package(PkgConfig REQUIRED)
 
-find_library(HISTORY_LIBRARY NAMES history)
-if(HISTORY_LIBRARY)
-  message(STATUS "Found GNU History: ${HISTORY_LIBRARY}")
-else()
-  message(FATAL_ERROR "GNU History library not found")
-endif()
-
-set(LIBRARIES ${READLINE_LIBRARY} ${HISTORY_LIBRARY})
+pkg_check_modules(readline REQUIRED IMPORTED_TARGET readline)
+link_libraries(PkgConfig::readline)
+include_directories(${readline_INCLUDE_DIRS})
 
 add_executable(step0_repl src/step0_repl.c)
-target_link_libraries(step0_repl PRIVATE ${LIBRARIES})
 
-find_library(PCRE_LIBRARY NAMES pcre)
-if(PCRE_LIBRARY)
-  message(STATUS "Found PCRE: ${PCRE_LIBRARY}")
-else()
-  message(FATAL_ERROR "PCRE library not found")
-endif()
+pkg_check_modules(pcre REQUIRED IMPORTED_TARGET libpcre)
+link_libraries(PkgConfig::pcre)
+include_directories(${pcre_INCLUDE_DIRS})
 
-set(LOCAL_LIBRARIES src/reader.c src/types.c src/printer.c
-                    src/SipHash/siphash.c)
-list(APPEND LIBRARIES ${PCRE_LIBRARY})
+add_library(mal src/reader.c src/printer.c src/types.c src/env.c
+                src/SipHash/siphash.c)
+link_libraries(mal)
 
-add_executable(step1_read_print src/step1_read_print.c ${LOCAL_LIBRARIES})
-target_link_libraries(step1_read_print PRIVATE ${LIBRARIES})
+add_executable(step1_read_print src/step1_read_print.c)
 
-add_executable(step2_eval src/step2_eval.c ${LOCAL_LIBRARIES})
-target_link_libraries(step2_eval PRIVATE ${LIBRARIES})
+add_executable(step2_eval src/step2_eval.c)
 
-list(APPEND LOCAL_LIBRARIES src/env.c src/step3_env.c)
-
-add_executable(step3_env src/step3_env.c ${LOCAL_LIBRARIES})
-target_link_libraries(step3_env PRIVATE ${LIBRARIES})
+add_executable(step3_env src/step3_env.c)
