@@ -26,7 +26,7 @@ typedef struct MalAtom {
     char *keyword;
     char *string;
     bool boolean;
-    void *function;
+    void *(*function)(void *);
     struct MalVector *vector;
     struct MalHashmap *hashmap;
     struct MalAtom *children;
@@ -35,12 +35,17 @@ typedef struct MalAtom {
 } MalAtom;
 
 // Free a `MalAtom`
-void malatom_free(MalAtom *malatom);
+void malatom_free(MalAtom *atom);
 
 // Create a new `MalAtom`.
 //
 // The `MalAtom` should be freed with `malatom_free` by the caller.
 MalAtom *malatom_new(const MalType type);
+
+// Copy a `MalAtom`
+//
+// The `MalAtom` should be freed with `malatom_free` by the caller.
+MalAtom *malatom_copy(const MalAtom *atom);
 
 typedef struct MalVector {
   int size;

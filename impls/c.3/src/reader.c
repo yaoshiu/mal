@@ -217,7 +217,12 @@ MalAtom *read_from(Reader *reader) {
 
 MalAtom *read_list(Reader *reader) {
   MalAtom *list = malatom_new(MAL_ATOM_LIST);
-  MalAtom *tail = NULL;
+  if (list == NULL) {
+    return NULL;
+  }
+  // The initial value should be NULL
+  // This is for static analysis
+  MalAtom *tail = list;
 
   while (true) {
     const char *peek = reader_peek(reader);
@@ -246,11 +251,10 @@ MalAtom *read_list(Reader *reader) {
     // Take ownership of the atom.
     if (list->value.children == NULL) {
       list->value.children = atom;
-      tail = atom;
     } else {
       tail->next = atom;
-      tail = atom;
     }
+    tail = atom;
   }
 }
 

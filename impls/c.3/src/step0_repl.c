@@ -3,7 +3,7 @@
 #include <readline/history.h>
 #include <readline/readline.h>
 
-#define PROMPT "user> "
+#include "consts.h"
 
 char *READ(char *str) { return str; }
 

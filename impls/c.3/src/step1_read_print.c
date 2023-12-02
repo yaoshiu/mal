@@ -4,10 +4,9 @@
 #include <readline/history.h>
 #include <readline/readline.h>
 
+#include "consts.h"
 #include "printer.h"
 #include "reader.h"
-
-#define PROMPT "user> "
 
 // Read a str and return a MalAtom
 //

@@ -34,8 +34,6 @@ MalAtom *malatom_new(const MalType type) {
     atom->value.hashmap = NULL;
     break;
   case MAL_FUNCTION:
-    atom->value.function = NULL;
-    break;
   case MAL_BOOL:
   case MAL_EOF:
   case MAL_INT:
@@ -98,6 +96,108 @@ void malatom_free(MalAtom *atom) {
   }
 
   free(atom);
+}
+
+MalAtom *malatom_copy(const MalAtom *atom) {
+  if (atom == NULL) {
+    return NULL;
+  }
+  MalAtom *copy = malatom_new(atom->type);
+  if (copy == NULL) {
+    return NULL;
+  }
+  switch (atom->type) {
+  case MAL_SYMBOL:
+    copy->value.symbol = strdup(atom->value.symbol);
+    if (copy->value.symbol == NULL) {
+      perror("Failed to allocate memory for symbol copy");
+      malatom_free(copy);
+      return NULL;
+    }
+    break;
+  case MAL_STRING:
+    copy->value.string = strdup(atom->value.string);
+    if (copy->value.string == NULL) {
+      perror("Failed to allocate memory for string copy");
+      malatom_free(copy);
+      return NULL;
+    }
+    break;
+  case MAL_ATOM_LIST:
+    copy->value.children = NULL;
+    for (MalAtom *child = atom->value.children, *prev = NULL; child != NULL;
+         child = child->next) {
+      MalAtom *child_copy = malatom_copy(child);
+      if (child_copy == NULL) {
+        malatom_free(copy);
+        return NULL;
+      }
+      if (prev == NULL) {
+        copy->value.children = child_copy;
+      } else {
+        prev->next = child_copy;
+      }
+      prev = child_copy;
+    }
+    break;
+  case MAL_KEYWORD:
+    copy->value.keyword = strdup(atom->value.keyword);
+    if (copy->value.keyword == NULL) {
+      perror("Failed to allocate memory for keyword copy");
+      malatom_free(copy);
+      return NULL;
+    }
+    break;
+  case MAL_VECTOR:
+    copy->value.vector = malvector_new(atom->value.vector->capacity);
+    if (copy->value.vector == NULL) {
+      malatom_free(copy);
+      return NULL;
+    }
+    for (int i = 0; i < atom->value.vector->size; i++) {
+      MalAtom *vector_copy = malatom_copy(atom->value.vector->buffer[i]);
+      if (vector_copy == NULL) {
+        malatom_free(copy);
+        return NULL;
+      }
+      if (malvector_push(copy->value.vector, vector_copy)) {
+        malatom_free(copy);
+        return NULL;
+      }
+    }
+    break;
+  case MAL_HASHMAP:
+    copy->value.hashmap = malhashmap_new(atom->value.hashmap->capacity);
+    if (copy->value.hashmap == NULL) {
+      malatom_free(copy);
+      return NULL;
+    }
+    for (MalHashentry *entry = atom->value.hashmap->head; entry != NULL;
+         entry = entry->next) {
+      if (malhashmap_insert(copy->value.hashmap, strdup(entry->key),
+                            malatom_copy((const MalAtom *)entry->value),
+                            entry->free_value)) {
+        malatom_free(copy);
+        return NULL;
+      }
+    }
+    break;
+  case MAL_BOOL:
+    copy->value.boolean = atom->value.boolean;
+    break;
+  case MAL_EOF:
+    break;
+  case MAL_INT:
+    copy->value.integer = atom->value.integer;
+    break;
+  case MAL_NIL:
+    break;
+  case MAL_FUNCTION:
+    copy->value.function = atom->value.function;
+    break;
+  }
+
+  return copy;
 }
 
 MalVector *malvector_new(const int capacity) {
@@ -197,6 +297,20 @@ int malvector_pop(MalVector *vector) {
 
 MalHashentry *malhashentry_new(char *key, void *atom,
                                void (*free_value)(void *)) {
+  if (key == NULL) {
+    if (atom != NULL) {
+      free_value(atom);
+    }
+    fprintf(stderr, "Cannot create hashmap entry with NULL key or value\n");
+    return NULL;
+  }
+
+  if (atom == NULL) {
+    free(key);
+    fprintf(stderr, "Cannot create hashmap entry with NULL key or value\n");
+    return NULL;
+  }
+
   MalHashentry *entry = (MalHashentry *)malloc(sizeof(MalHashentry));
   if (entry == NULL) {
     perror("Failed to allocate memory for hashmap entry");
@@ -287,11 +401,15 @@ int malhashmap_resize(MalHashmap *hashmap, const int capacity) {
     return 1;
   }
   hashmap->head = NULL;
+
+  int state_code = 0;
   for (MalHashentry *current = old_head, *next; current != NULL;
        current = next) {
     // TODO: Check for errors
-    malhashmap_insert(hashmap, current->key, current->value,
-                      current->free_value);
+    if (malhashmap_insert(hashmap, current->key, current->value,
+                          current->free_value)) {
+      state_code = 1;
+    }
 
     next = current->next;
 
@@ -299,7 +417,7 @@ int malhashmap_resize(MalHashmap *hashmap, const int capacity) {
   }
   free(old_buffer);
 
-  return 0;
+  return state_code;
 }
 
 uint32_t hash(const char *key, const uint8_t seed[16]) {

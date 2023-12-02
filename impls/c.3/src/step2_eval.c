@@ -9,8 +9,6 @@
 #include "reader.h"
 #include "types.h"
 
-#define PROMPT "user> "
-
 // Read a str and return a `MalAtom`
 //
 // The returned `MalAtom` should be freed by the caller.
@@ -50,6 +48,7 @@ MalAtom *eval_ast(MalAtom *ast, const MalHashmap *repl_env) {
   case MAL_SYMBOL: {
     const MalAtom *value =
         (const MalAtom *)malhashmap_get(repl_env, ast->value.symbol);
+    malatom_free(ast);
     if (value == NULL) {
       fprintf(stderr, "Symbol not found: %s\n", ast->value.symbol);
       return NULL;
@@ -60,35 +59,40 @@ MalAtom *eval_ast(MalAtom *ast, const MalHashmap *repl_env) {
       return NULL;
     }
     copy->value = value->value;
-    malatom_free(ast);
     return copy;
   }
 
   case MAL_ATOM_LIST: {
-    MalAtom *list = malatom_new(MAL_ATOM_LIST);
-    MalAtom *tail;
-    if (list == NULL) {
-      return NULL;
-    }
-    for (MalAtom *it = ast->value.children, *next; it != NULL; it = next) {
+    MalAtom *prev = ast;
+    for (MalAtom *it = ast->value.children, *next = NULL; it != NULL;
+         it = next) {
       next = it->next;
-      MalAtom *value = EVAL(it, repl_env);
-      it = NULL;
-      if (value == NULL) {
-        malatom_free(list);
+
+      // Delete the current element from the list
+      it->next = NULL;
+      if (prev == ast) {
+        prev->value.children = next;
+      } else {
+        prev->next = next;
+      }
+
+      it = EVAL(it, repl_env);
+      if (it == NULL) {
         malatom_free(ast);
         return NULL;
       }
 
-      if (list->value.children == NULL) {
-        list->value.children = value;
+      // Insert the evaluated element back into the list
+      it->next = next;
+      if (prev == ast) {
+        prev->value.children = it;
       } else {
-        tail->next = value;
+        prev->next = it;
       }
-      tail = value;
+
+      prev = it;
     }
-    free(ast);
-    return list;
+    return ast;
   }
 
   case MAL_VECTOR:
@@ -274,7 +278,7 @@ char *rep(const char *str) {
 
   char *plus_str = strdup("+");
   MalAtom *plus_atom = malatom_new(MAL_FUNCTION);
-  plus_atom->value.function = (void *)plus;
+  plus_atom->value.function = (void *(*)(void *))plus;
   malhashmap_insert(repl_env, plus_str, plus_atom,
                     (void (*)(void *))malatom_free);
   plus_str = NULL;
@@ -282,7 +286,7 @@ char *rep(const char *str) {
 
   char *minus_str = strdup("-");
   MalAtom *minus_atom = malatom_new(MAL_FUNCTION);
-  minus_atom->value.function = (void *)minus;
+  minus_atom->value.function = (void *(*)(void *))minus;
   malhashmap_insert(repl_env, minus_str, minus_atom,
                     (void (*)(void *))malatom_free);
   minus_str = NULL;
@@ -290,7 +294,7 @@ char *rep(const char *str) {
 
   char *multiply_str = strdup("*");
   MalAtom *multiply_atom = malatom_new(MAL_FUNCTION);
-  multiply_atom->value.function = (void *)multiply;
+  multiply_atom->value.function = (void *(*)(void *))multiply;
   malhashmap_insert(repl_env, multiply_str, multiply_atom,
                     (void (*)(void *))malatom_free);
   multiply_str = NULL;
@@ -298,7 +302,7 @@ char *rep(const char *str) {
 
   char *divide_str = strdup("/");
   MalAtom *divide_atom = malatom_new(MAL_FUNCTION);
-  divide_atom->value.function = (void *)divide;
+  divide_atom->value.function = (void *(*)(void *))divide;
   malhashmap_insert(repl_env, divide_str, divide_atom,
                     (void (*)(void *))malatom_free);
   divide_str = NULL;
