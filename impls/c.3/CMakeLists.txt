@@ -40,3 +40,15 @@ add_executable(step1_read_print src/step1_read_print.c)
 add_executable(step2_eval src/step2_eval.c)
 
 add_executable(step3_env src/step3_env.c)
+
+install(TARGETS step0_repl step1_read_print step2_eval step3_env
+        RUNTIME DESTINATION bin)
+
+install(FILES src/reader.h src/printer.h src/types.h src/env.h src/consts.h
+        DESTINATION include/mal)
+
+install(
+  TARGETS mal
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)

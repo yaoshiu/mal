@@ -5,9 +5,17 @@
 
 #include "types.h"
 
-// Returns a string representation of atom.
-//
-// The returned string should be freed with `free` by the caller.
+/**
+ * Prints a MalAtom struct to a string.
+ *
+ * Parameters:
+ * - atom: MalAtom to print. Caller retains ownership.
+ * - print_readably: Whether to print string escapes for a reader.
+ *
+ * Return:
+ * - String representation of atom. Caller takes ownership.
+ *   Needs to be freed later.
+ */
 char *pr_str(const MalAtom *atom, const bool print_readably);
 
 #endif

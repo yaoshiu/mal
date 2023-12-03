@@ -222,6 +222,7 @@ MalAtom *read_list(Reader *reader) {
   }
   // The initial value should be NULL
   // This is for static analysis
+  // TODO: Maybe a better way to do this?
   MalAtom *tail = list;
 
   while (true) {
@@ -248,7 +249,7 @@ MalAtom *read_list(Reader *reader) {
       return NULL;
     }
 
-    // Take ownership of the atom.
+    // Takes ownership of the atom.
     if (list->value.children == NULL) {
       list->value.children = atom;
     } else {

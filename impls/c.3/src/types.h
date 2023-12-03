@@ -34,17 +34,36 @@ typedef struct MalAtom {
   struct MalAtom *next;
 } MalAtom;
 
-// Free a `MalAtom`
+/**
+ * Frees memory for a MalAtom.
+ *
+ * Paramaters:
+ * - atom: MalAtom to free. Takes ownership from caller.
+ */
 void malatom_free(MalAtom *atom);
 
-// Create a new `MalAtom`.
-//
-// The `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Allocates and initializes a new MalAtom.
+ *
+ * Parameters:
+ * - type: Type of MalAtom to create.
+ *
+ * Returns:
+ * - New MalAtom struct. Caller takes ownership.
+ *   Must be freed later with malatom_free().
+ */
 MalAtom *malatom_new(const MalType type);
 
-// Copy a `MalAtom`
-//
-// The `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Allocates and initializes a new MalAtom with a given value.
+ *
+ * Parameters:
+ * - atom: MalAtom to set value of. Caller retains ownership.
+ *
+ * Returns:
+ * - New MalAtom struct. Caller takes ownership.
+ *   Must be freed later with malatom_free().
+ */
 MalAtom *malatom_copy(const MalAtom *atom);
 
 typedef struct MalVector {
@@ -53,36 +72,84 @@ typedef struct MalVector {
   struct MalAtom **buffer;
 } MalVector;
 
-// Create a new `MalVector`
-//
-// The `MalVector` should be freed with `malvector_free` by the caller.
+/**
+ * Allocates and initializes a new MalVector.
+ *
+ * Parameters:
+ * - capacity: Initial capacity of vector.
+ *
+ * Returns:
+ * - New MalVector struct. Caller takes ownership.
+ *   Must be freed later with malvector_free().
+ */
 MalVector *malvector_new(const int capacity);
 
-// Free a `MalVector`
+/**
+ * Frees memory for a MalVector.
+ *
+ * Paramaters:
+ * - vector: MalVector to free. Takes ownership from caller.
+ */
 void malvector_free(MalVector *vector);
 
-// Set the value of a `MalVector` at a given index
-//
-// Takes ownership of the `MalAtom` passed in. Which means that the caller
-// should only use `malvector_free` to free the `MalAtom` passed in.
+/**
+ * Set the value of a MalVector at a given index.
+ *
+ * Parameters:
+ * - vector: MalVector to set value of. Caller retains ownership.
+ * - index: Index to set value at.
+ * - atom: MalAtom to set value to. Takes ownership from caller.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to set value.
+ */
 int malvector_set(MalVector *vector, const int index, MalAtom *atom);
 
-// Resize a `MalVector`
+/**
+ * Resize a MalVector.
+ *
+ * Parameters:
+ * - vector: MalVector to resize. Caller retains ownership.
+ * - capacity: New capacity of vector.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to resize.
+ */
 int malvector_resize(MalVector *vector, const int capacity);
 
-// Push a `MalAtom` to the end of a `MalVector`
-//
-// Takes ownership of the `MalAtom` passed in. Which means that the caller
-// should only use `malvector_free` to free the `MalAtom` passed in.
+/**
+ * Push a MalAtom onto the end of a MalVector.
+ *
+ * Parameters:
+ * - vector: MalVector to push value onto. Caller retains ownership.
+ * - atom: MalAtom to push onto vector. Takes ownership from caller.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to push value.
+ */
 int malvector_push(MalVector *vector, MalAtom *atom);
 
-// Pop a `MalAtom` from the end of a `MalVector`. Will also free the poped
-// `MalAtom`
+/**
+ * Pop a MalAtom from the end of a MalVector.
+ *
+ * Parameters:
+ * - vector: MalVector to pop value from. Caller retains ownership.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to pop value.
+ */
 int malvector_pop(MalVector *vector);
 
-// Get the value of a `MalVector` at a given index
-//
-// The `MalAtom` returned should not be freed by the caller.
+/**
+ * Get the value of a MalVector at a given index.
+ *
+ * Parameters:
+ * - vector: MalVector to get value from. Caller retains ownership.
+ * - index: Index to get value from.
+ *
+ * Returns:
+ * - MalAtom at index. Caller does NOT take ownership.
+ */
 const MalAtom *malvector_get(const MalVector *vector, const int index);
 
 typedef struct MalHashentry {
@@ -93,17 +160,24 @@ typedef struct MalHashentry {
   struct MalHashentry *next;
 } MalHashentry;
 
-// Create a new `MalHashentry`
-//
-// The `MalHashentry` should be freed with `malhashentry_free` by the caller.
-// The `key` passed in should not be freed by the caller.
-// The `value` passed in should not be freed by the caller.
+/**
+ * Allocates and initializes a new MalHashentry.
+ *
+ * Parameters:
+ * - key: Key of MalHashentry. Takes ownership from caller.
+ * - value: Value of MalHashentry. Takes ownership from caller.
+ * - free_value: Function to free value.
+ *
+ * Returns:
+ * - New MalHashentry struct. Caller takes ownership.
+ *   Must be freed later with malhashentry_free().
+ */
 MalHashentry *malhashentry_new(char *key, void *value,
                                void (*free_value)(void *));
 
-// Free a `MalHashentry`
-// The `value` will be freed by the `free_value` function passed in when the
-// `MalHashentry` was created.
+/**
+ * Frees memory for a MalHashentry.
+ */
 void malhashentry_free(MalHashentry *hashentry);
 
 typedef struct MalHashmap {
@@ -114,30 +188,72 @@ typedef struct MalHashmap {
   uint8_t key[16];
 } MalHashmap;
 
-// Create a new `MalHashmap`
-//
-// The `MalHashmap` should be freed with `malhashmap_free` by the caller.
+/**
+ * Allocates and initializes a new MalHashmap.
+ *
+ * Parameters:
+ * - capacity: Initial capacity of hashmap.
+ *
+ * Returns:
+ * - New MalHashmap struct. Caller takes ownership.
+ *   Must be freed later with malhashmap_free().
+ */
 MalHashmap *malhashmap_new(const int capacity);
 
-// Hash function
+/**
+ * Hash a string.
+ *
+ * Parameters:
+ * - key: String to hash. Caller retains ownership.
+ * - seed: Seed to hash with.
+ *
+ * Returns:
+ * - Hash of string.
+ */
 uint32_t hash(const char *key, const uint8_t seed[16]);
 
-// Free a `MalHashmap`
+/**
+ * Frees memory for a MalHashmap.
+ */
 void malhashmap_free(MalHashmap *hashmap);
 
-// Insert a `MalAtom` into a `MalHashmap` at a given key
-//
-// The `key` passed in should not be freed by the caller.
-// The `value` passed in should not be freed by the caller.
+/**
+ * Insert a value into a MalHashmap at a given key.
+ *
+ * Parameters:
+ * - hashmap: MalHashmap to insert value into. Caller retains ownership.
+ * - key: Key to insert value at. Takes ownership from caller.
+ * - value: Value to insert. Takes ownership from caller.
+ * - free_value: Function to free value.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to insert value.
+ */
 int malhashmap_insert(MalHashmap *hashmap, char *key, void *value,
                       void (*free_value)(void *));
 
-// Get the value of a `MalHashmap` at a given key
-//
-// The `MalAtom` returned should not be freed by the caller.
+/**
+ * Get a value from a MalHashmap at a given key.
+ *
+ * Parameters:
+ * - hashmap: MalHashmap to get value from. Caller retains ownership.
+ * - key: Key to get value from. Caller retains ownership.
+ *
+ * Returns:
+ * - Value at key. Caller does NOT take ownership.
+ */
 const void *malhashmap_get(const MalHashmap *hashmap, const char *key);
 
-// Resize a `MalHashmap`
+/**
+ * Resize a MalHashmap.
+ *
+ * Parameters:
+ * - hashmap: MalHashmap to resize. Caller retains ownership.
+ * - capacity: New capacity of hashmap.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to resize.
+ */
 int malhashmap_resize(MalHashmap *hashmap, const int capacity);
 
 #endif /* MAL_TYPE_H */

@@ -8,27 +8,66 @@ typedef struct Env {
   const struct Env *outer;
 } Env;
 
-// Create a new environment with the given outer environment.
-//
-// Does not take ownership of the outer environment.
-// The outer environment will not be freed when the new environment is freed.
+/**
+ * Allocates memory and initializes a new environment.
+ *
+ * Parameters:
+ * - outer: The outer env to search if symbol not found in this env. Caller
+ * retains ownership.
+ * - capacity: Initial capacity of the hashmap for this env.
+ *
+ * Return:
+ * - New Env struct. Caller takes ownership.
+ *    Must be freed later with env_free().
+ */
 Env *env_new(const Env *outer, const int capacity);
 
-// Free the given environment.
+/**
+ * Frees memory allocated for an environment.
+ *
+ * Parameters:
+ * - env: Env to free. Takes ownership from caller.
+ */
 void env_free(Env *env);
 
-// Get the value of the given key in the environment.
-//
-// Returns NULL if the key is not found.
+/**
+ * Gets a value from the environment or any outer environments.
+ *
+ * Parameters:
+ * - env: Env struct to search. Caller retains ownership.
+ * - key: Key for the value to get. Caller retains ownership.
+ *
+ * Return:
+ * - Value for the key if found, NULL if not found.
+ *   Caller does NOT take ownership.
+ */
 const void *env_get(const Env *env, const char *key);
 
-// Find the environment that contains the given key.
+/**
+ * Finds the env that contains the given key, searching outwards.
+ *
+ * Parameters:
+ * - env: Env struct to search. Caller retains ownership.
+ * - key: Key to find env for. Caller retains ownership.
+ *
+ * Return:
+ * - Env that contains the key if found, NULL if not found.
+ *   Caller does NOT take ownership.
+ */
 const Env *env_find(const Env *env, const char *key);
 
-// Set the value of the given key in the environment.
-//
-// This function takes ownership of the `key` and `value`.
-// The key and value will be freed when the environment is freed.
+/**
+ * Inserts a key-value pair into the env.
+ *
+ * Parameters:
+ * - env: Env struct to insert into. Caller retains ownership.
+ * - key: Key for insertion. Method takes ownership.
+ * - value: Value for insertion. Method takes ownership.
+ * - free_value: Function to free value when removed from map.
+ *
+ * Return:
+ * - 0 if success, 1 if error.
+ */
 int env_set(Env *env, char *key, void *val, void (*free_val)(void *));
 
 #endif

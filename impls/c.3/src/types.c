@@ -405,7 +405,6 @@ int malhashmap_resize(MalHashmap *hashmap, const int capacity) {
   int state_code = 0;
   for (MalHashentry *current = old_head, *next; current != NULL;
        current = next) {
-    // TODO: Check for errors
     if (malhashmap_insert(hashmap, current->key, current->value,
                           current->free_value)) {
       state_code = 1;

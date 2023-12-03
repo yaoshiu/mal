@@ -8,40 +8,73 @@ typedef struct Token {
   char *str;
 } Token;
 
-// Create a new `Token` object.
-//
-// The token should be freed with `token_free`.
+/**
+ * Allocates and initializes a new Token.
+ *
+ * Parameters:
+ * - str: String value for token. Caller retains ownership.
+ *
+ * Returns:
+ * - New Token struct. Caller takes ownership.
+ *   Must be freed later with token_free().
+ */
 Token *token_new(const char *str);
 
-// Free a `Token` object.
-//
-// Take the `token` ownership.
+/**
+ * Frees memory for a Token.
+ *
+ * Parameters:
+ * - token: Token to free. Takes ownership from caller.
+ */
 void token_free(Token *token);
 
 typedef struct Tokens {
   Token *head, *tail;
 } Tokens;
 
-// Compile the regex.
-//
-// Return 0 on success, -1 on failure.
-// The regex should be freed with `regex_free`.
+/**
+ * Compiles the regular expression used for tokenization.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure to compile regex.
+ *
+ * The compiled regex is stored globally in the regex variable.
+ * Must be freed later with regex_free().
+ */
 int regex_compile();
 
-// Free the regex.
+/**
+ * Frees compiled regular expression.
+ */
 void regex_free();
 
-// Create a new `Tokens` object.
-//
-// The `tokens` should be freed with `tokens_free()`.
+/**
+ * Allocates and initializes a new Tokens container.
+ *
+ * Returns:
+ * - New Tokens container. Caller takes ownership.
+ *   Must be freed later with tokens_free().
+ */
 Tokens *tokens_new();
 
-// Free a `Tokens` object.
-//
-// Took the `tokens` ownership.
+/**
+ * Frees Tokens container and all tokens.
+ *
+ * Parameters:
+ * - tokens: Tokens to free. Takes ownership from caller.
+ */
 void tokens_free(Tokens *tokens);
 
-// Add a new `token` (copy) to the end of `tokens`.
+/**
+ * Pushes a token to the end of a Tokens list.
+ *
+ * Parameters:
+ * - tokens: Tokens container to push to. Caller retains ownership.
+ * - token: Token string to add. Caller retains ownership.
+ *
+ * Returns:
+ * - 0 on success, 1 on failure.
+ */
 int tokens_push(Tokens *tokens, const char *token);
 
 // Remove the last token from `tokens`.
@@ -52,56 +85,162 @@ typedef struct Reader {
   Token *current;
 } Reader;
 
-// Create a new `Reader` object.
-//
-// Reader should be freed with `reader_free` by the caller.
-// Take the `tokens` ownership. Which means that the tokens should only be freed
-// with `reader_free` after passed to this function.
+/**
+ * Allocates and initializes new Reader.
+ *
+ * Parameters:
+ * - tokens: Token container for reader. Caller retains ownership.
+ *
+ * Returns:
+ * - New Reader instance. Caller takes ownership,
+ *   Must be freed later with reader_free().
+ */
 Reader *reader_new(Tokens *tokens);
 
-// Free a Reader object.
+/**
+ * Frees a Reader instance.
+ *
+ * Parameters:
+ * - reader: Reader to free. Takes ownership from caller.
+ */
 void reader_free(Reader *reader);
 
-// Return the next token from `reader`.
-//
-// The returned token should not be freed since it is owned by reader,
-// which means the caller should in most cases copy the token.
+/**
+ * Gets next token from reader.
+ *
+ * Parameters:
+ * - reader: Reader to advance. Caller retains ownership.
+ *
+ * Returns:
+ * - Next token string. Caller does NOT take ownership.
+ */
 const char *reader_next(Reader *reader);
 
-// Return the next token from `reader` without moving the position.
-//
-// The returned token should not be freed since it is owned by reader;
-// which means the caller should in most cases copy the token.
+/**
+ * Gets current token without advancing.
+ *
+ * Parameters:
+ * - reader: Reader to peek from. Caller retains ownership.
+ *
+ * Returns:
+ * - Current token string. Caller does NOT take ownership.
+ */
 const char *reader_peek(const Reader *reader);
 
-// Return a `MalAtom` from a string.
+/**
+ * Parses a string into Mal atoms.
+ *
+ * Parameters:
+ * - str: String to parse. Caller retains ownership.
+ *
+ * Returns:
+ * - MalAtom from parsing string. Caller takes ownership.
+ *   Must be freed later with malatom_free().
+ */
 MalAtom *read_str(const char *str);
 
-// Return a `Tokens` object from a string.
+/**
+ * Tokenizes a string into tokens.
+ *
+ * Parameters:
+ * - str: Input string to tokenize. Caller retains ownership.
+ *
+ * Returns:
+ * - Tokens container with tokenized strings. Caller takes ownership.
+ *   Must be freed later with tokens_free().
+ */
 Tokens *tokenize(const char *str);
 
-// The returned `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Reads a Mal list from the reader.
+ *
+ * Parameters:
+ * - reader: Reader to read from. Caller retains ownership.
+ *
+ * Returns:
+ * - MalAtom of type MAL_LIST. Caller takes ownership.
+ *   Must be freed later with malatom_free().
+ */
 MalAtom *read_from(Reader *reader);
 
-// The returned `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Reads a Mal vector from the reader.
+ *
+ * Parameters:
+ * - reader: Reader to read from. Caller retains ownership.
+ *
+ * Returns:
+ * - MalVector struct. Caller takes ownership.
+ *   Must be freed later with malvector_free().
+ */
 MalAtom *read_list(Reader *reader);
 
-// The returned `MalAtom` should be freed with `malatom_free`.
+/**
+ * Reads a single Mal atom from the reader.
+ *
+ * Parameters:
+ * - reader: Reader to parse atom from. Caller retains ownership.
+ *
+ * Returns:
+ * - Next MalAtom from reader. Caller takes ownership.
+ */
 MalAtom *read_atom(Reader *reader);
 
-// The ruturned string should be freed with `free`.
+/**
+ * Reads a string atom from reader.
+ *
+ * Parameters:
+ * - token: Current token containing quote. Caller retains ownership.
+ *
+ * Returns:
+ * - New MalAtom string. Caller takes ownership.
+ */
 char *read_atom_string(const char *token);
 
-// The returned `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Parses vector from reader.
+ *
+ * Parameters:
+ * - reader: Reader to parse from. Caller retains ownership.
+ *
+ * Returns:
+ * - MalVector parsed from reader. Caller takes ownership.
+ */
 MalVector *read_atom_vector(Reader *reader);
 
-// The returned `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Parses a hashmap from the reader.
+ *
+ * Parameters:
+ * - reader: Reader to parse from. Caller retains ownership.
+ *
+ * Returns:
+ * - MalHashmap parsed from reader. Caller takes ownership.
+ */
 MalHashmap *read_atom_hashmap(Reader *reader);
 
-// The returned `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Reads and parses a metadata annotation.
+ *
+ * Parameters:
+ * - reader: Reader to parse metadata from.
+ *            Caller retains ownership.
+ *
+ * Returns:
+ * - MalAtom with metadata. Caller takes ownership.
+ */
 MalAtom *read_metadata(Reader *reader);
 
-// The returned `MalAtom` should be freed with `malatom_free` by the caller.
+/**
+ * Reads and parses quoted Mal atoms.
+ *
+ * Parameters:
+ * - reader: Reader to parse from. Caller retains ownership.
+ * - token: Current token with quote. Caller retains ownership.
+ *
+ * Returns:
+ * - MalAtom with quoted form. Caller takes ownership.
+ */
 MalAtom *read_quotes(Reader *reader, const char *token);
 
 #endif /* MAL_READER_H */
