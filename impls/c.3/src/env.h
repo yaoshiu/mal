@@ -41,7 +41,7 @@ void env_free(Env *env);
  * - Value for the key if found, NULL if not found.
  *   Caller does NOT take ownership.
  */
-const void *env_get(const Env *env, const char *key);
+const MalAtom *env_get(const Env *env, const MalAtom *key);
 
 /**
  * Finds the env that contains the given key, searching outwards.
@@ -54,7 +54,7 @@ const void *env_get(const Env *env, const char *key);
  * - Env that contains the key if found, NULL if not found.
  *   Caller does NOT take ownership.
  */
-const Env *env_find(const Env *env, const char *key);
+const Env *env_find(const Env *env, const MalAtom *key);
 
 /**
  * Inserts a key-value pair into the env.
@@ -68,6 +68,6 @@ const Env *env_find(const Env *env, const char *key);
  * Return:
  * - 0 if success, 1 if error.
  */
-int env_set(Env *env, char *key, void *val, void (*free_val)(void *));
+int env_set(Env *env, MalAtom *key, MalAtom *value);
 
 #endif

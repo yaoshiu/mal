@@ -262,6 +262,9 @@ MalAtom *read_list(Reader *reader) {
 MalAtom *read_atom(Reader *reader) {
   MalAtom *atom;
   const char *token = reader_next(reader);
+  if (token == NULL) {
+    return NULL;
+  }
 
   bool is_int = false;
   for (int i = (token[0] == '-'); token[i] != '\0'; i++) {
@@ -492,10 +495,7 @@ MalHashmap *read_atom_hashmap(Reader *reader) {
       return NULL;
     }
 
-    char *key_str = pr_str(key, true);
-    malatom_free(key);
-    if (malhashmap_insert(map, key_str, (void *)value,
-                          (void (*)(void *))malatom_free)) {
+    if (malhashmap_insert(map, key, value)) {
       malhashmap_free(map);
       malatom_free(value);
       return NULL;
@@ -583,9 +583,8 @@ MalAtom *read_metadata(Reader *reader) {
       return NULL;
     }
 
-    char *key_str = pr_str(key, true);
-    if (malhashmap_insert(atom->value.children->next->next->value.hashmap,
-                          key_str, value, (void (*)(void *))malatom_free)) {
+    if (malhashmap_insert(atom->value.children->next->next->value.hashmap, key,
+                          value)) {
       malatom_free(atom);
       return NULL;
     }

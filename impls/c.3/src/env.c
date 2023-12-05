@@ -28,7 +28,7 @@ void env_free(Env *env) {
   free(env);
 }
 
-const void *env_get(const Env *env, const char *key) {
+const MalAtom *env_get(const Env *env, const MalAtom *key) {
   if (env == NULL) {
     fprintf(stderr, "Cannot get value from NULL Env\n");
     return NULL;
@@ -41,14 +41,13 @@ const void *env_get(const Env *env, const char *key) {
 
   env = env_find(env, key);
   if (env == NULL) {
-    fprintf(stderr, "Symbol %s not found in Env\n", key);
     return NULL;
   }
 
   return malhashmap_get(env->data, key);
 }
 
-const Env *env_find(const Env *env, const char *key) {
+const Env *env_find(const Env *env, const MalAtom *key) {
   if (env == NULL) {
     fprintf(stderr, "Cannot find value from NULL Env\n");
     return NULL;
@@ -68,27 +67,27 @@ const Env *env_find(const Env *env, const char *key) {
   return NULL;
 }
 
-int env_set(Env *env, char *key, void *value, void (*free_value)(void *)) {
+int env_set(Env *env, MalAtom *key, MalAtom *value) {
   if (key == NULL) {
     if (value != NULL) {
-      free_value(value);
+      malatom_free(value);
     }
     fprintf(stderr, "Cannot set value in Env with NULL key\n");
     return 1;
   }
 
   if (value == NULL) {
-    free(key);
+    malatom_free(key);
     fprintf(stderr, "Cannot set NULL value in Env\n");
     return 1;
   }
 
   if (env == NULL) {
-    free(key);
-    free_value(value);
+    malatom_free(key);
+    malatom_free(value);
     fprintf(stderr, "Cannot set value in NULL Env\n");
     return 1;
   }
 
-  return malhashmap_insert(env->data, key, value, free_value);
+  return malhashmap_insert(env->data, key, value);
 }

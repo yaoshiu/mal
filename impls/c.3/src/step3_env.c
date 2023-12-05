@@ -47,10 +47,10 @@ MalAtom *eval_ast(MalAtom *ast, Env *repl_env) {
 
   switch (ast->type) {
   case MAL_SYMBOL: {
-    const MalAtom *value =
-        (const MalAtom *)env_get(repl_env, ast->value.symbol);
+    const MalAtom *value = env_get(repl_env, ast);
     malatom_free(ast);
     if (value == NULL) {
+      fprintf(stderr, "Symbol not found\n");
       return NULL;
     }
     MalAtom *copy = malatom_copy(value);
@@ -105,17 +105,43 @@ MalAtom *eval_ast(MalAtom *ast, Env *repl_env) {
     }
     return ast;
 
-  case MAL_HASHMAP:
+  case MAL_HASHMAP: {
+    MalAtom *result = malatom_new(MAL_HASHMAP);
+    if (result == NULL) {
+      return NULL;
+    }
+    result->value.hashmap = malhashmap_new(DEFAULT_CONTAINER_CAPACITY);
+    if (result->value.hashmap == NULL) {
+      malatom_free(result);
+      return NULL;
+    }
     for (MalHashentry *it = ast->value.hashmap->head; it != NULL;
          it = it->next) {
-      MalAtom *value = EVAL((MalAtom *)it->value, repl_env);
+      MalAtom *value = EVAL(it->value, repl_env);
+      it->value = NULL;
       if (value == NULL) {
+        malatom_free(result);
         malatom_free(ast);
         return NULL;
       }
-      it->value = value;
+      MalAtom *key = EVAL(it->key, repl_env);
+      it->key = NULL;
+      if (key == NULL) {
+        malatom_free(result);
+        malatom_free(ast);
+        malatom_free(value);
+        return NULL;
+      }
+      if (malhashmap_insert(result->value.hashmap, key, value)) {
+        malatom_free(ast);
+        malatom_free(key);
+        malatom_free(value);
+        return NULL;
+      }
     }
-    return ast;
+    malatom_free(ast);
+    return result;
+  }
 
   default:
     return ast;
@@ -167,22 +193,23 @@ MalAtom *eval_def(MalAtom *ast, Env *repl_env) {
 
   // Delete the current element from the list
   key->next = NULL;
+  symbol->next = NULL;
+  malatom_free(ast);
+
   value = EVAL(value, repl_env);
   if (value == NULL) {
-    malatom_free(ast);
+    malatom_free(key);
     return NULL;
   }
-
-  char *key_str = strdup(key->value.symbol);
-  malatom_free(ast);
 
   MalAtom *value_copy = malatom_copy(value);
   if (value_copy == NULL) {
-    free(key_str);
+    malatom_free(key);
     malatom_free(value);
     return NULL;
   }
-  if (env_set(repl_env, key_str, value, (void (*)(void *))malatom_free)) {
+  if (env_set(repl_env, key, value)) {
+    malatom_free(value_copy);
     return NULL;
   }
 
@@ -254,11 +281,9 @@ MalAtom *eval_let(MalAtom *ast, Env *repl_env) {
         return NULL;
       }
 
-      char *key_str = strdup(key->value.symbol);
       key->next = NULL;
-      malatom_free(key);
 
-      if (env_set(let_env, key_str, value, (void (*)(void *))malatom_free)) {
+      if (env_set(let_env, key, value)) {
         malatom_free(ast);
         env_free(let_env);
         return NULL;
@@ -291,10 +316,7 @@ MalAtom *eval_let(MalAtom *ast, Env *repl_env) {
         return NULL;
       }
 
-      char *key_str = strdup(key->value.symbol);
-      malatom_free(key);
-
-      if (env_set(let_env, key_str, value, (void (*)(void *))malatom_free)) {
+      if (env_set(let_env, key, value)) {
         malatom_free(ast);
         env_free(let_env);
         return NULL;
@@ -502,15 +524,17 @@ Env *init_env() {
     return NULL;
   }
   plus_atom->value.function = (void *(*)(void *))plus;
-  char *plus_str = strdup("+");
-  if (env_set(repl_env, plus_str, plus_atom, (void (*)(void *))malatom_free)) {
-    free(plus_str);
+  MalAtom *plus = malatom_new(MAL_SYMBOL);
+  if (plus == NULL) {
     malatom_free(plus_atom);
     env_free(repl_env);
     return NULL;
   }
-  plus_str = NULL;
-  plus_atom = NULL;
+  plus->value.symbol = strdup("+");
+  if (env_set(repl_env, plus, plus_atom)) {
+    env_free(repl_env);
+    return NULL;
+  }
 
   MalAtom *minus_atom = malatom_new(MAL_FUNCTION);
   if (minus_atom == NULL) {
@@ -519,16 +543,17 @@ Env *init_env() {
     return NULL;
   }
   minus_atom->value.function = (void *(*)(void *))minus;
-  char *minus_str = strdup("-");
-  if (env_set(repl_env, minus_str, minus_atom,
-              (void (*)(void *))malatom_free)) {
-    free(minus_str);
+  MalAtom *minus = malatom_new(MAL_SYMBOL);
+  if (minus == NULL) {
     malatom_free(minus_atom);
     env_free(repl_env);
     return NULL;
   }
-  minus_str = NULL;
-  minus_atom = NULL;
+  minus->value.symbol = strdup("-");
+  if (env_set(repl_env, minus, minus_atom)) {
+    env_free(repl_env);
+    return NULL;
+  }
 
   MalAtom *multiply_atom = malatom_new(MAL_FUNCTION);
   if (multiply_atom == NULL) {
@@ -537,13 +562,17 @@ Env *init_env() {
     return NULL;
   }
   multiply_atom->value.function = (void *(*)(void *))multiply;
-  char *multiply_str = strdup("*");
-  if (env_set(repl_env, multiply_str, multiply_atom,
-              (void (*)(void *))malatom_free)) {
-    free(multiply_str);
+  MalAtom *multiply = malatom_new(MAL_SYMBOL);
+  if (multiply == NULL) {
+    malatom_free(multiply_atom);
+    env_free(repl_env);
+    return NULL;
   }
-  multiply_str = NULL;
-  multiply_atom = NULL;
+  multiply->value.symbol = strdup("*");
+  if (env_set(repl_env, multiply, multiply_atom)) {
+    env_free(repl_env);
+    return NULL;
+  }
 
   MalAtom *divide_atom = malatom_new(MAL_FUNCTION);
   if (divide_atom == NULL) {
@@ -552,16 +581,17 @@ Env *init_env() {
     return NULL;
   }
   divide_atom->value.function = (void *(*)(void *))divide;
-  char *divide_str = strdup("/");
-  if (env_set(repl_env, divide_str, divide_atom,
-              (void (*)(void *))malatom_free)) {
-    free(divide_str);
+  MalAtom *divide = malatom_new(MAL_SYMBOL);
+  if (divide == NULL) {
     malatom_free(divide_atom);
     env_free(repl_env);
     return NULL;
   }
-  divide_str = NULL;
-  divide_atom = NULL;
+  divide->value.symbol = strdup("/");
+  if (env_set(repl_env, divide, divide_atom)) {
+    env_free(repl_env);
+    return NULL;
+  }
 
   return repl_env;
 }

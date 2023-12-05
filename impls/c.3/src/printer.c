@@ -127,16 +127,14 @@ char *pr_str(const MalAtom *atom, const bool print_readably) {
       break;
     }
     strcpy(str, "{");
-    for (MalHashentry *entry = atom->value.hashmap->head; entry != NULL;
+    for (const MalHashentry *entry = atom->value.hashmap->head; entry != NULL;
          entry = entry->next) {
-      MalAtom *key = read_str(entry->key);
-      char *key_str = pr_str(key, print_readably);
+      char *key = pr_str(entry->key, print_readably);
       char *val = pr_str((MalAtom *)entry->value, print_readably);
-      strcat(str, key_str);
+      strcat(str, key);
       strcat(str, " ");
       strcat(str, val);
-      malatom_free(key);
-      free(key_str);
+      free(key);
       free(val);
       if (entry->next != NULL) {
         strcat(str, " ");

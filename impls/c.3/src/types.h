@@ -66,6 +66,18 @@ MalAtom *malatom_new(const MalType type);
  */
 MalAtom *malatom_copy(const MalAtom *atom);
 
+/**
+ * Compare two MalAtoms for equality.
+ *
+ * Parameters:
+ * - a: First MalAtom to compare. Caller retains ownership.
+ * - b: Second MalAtom to compare. Caller retains ownership.
+ *
+ * Returns:
+ * - True if MalAtoms are equal, false otherwise.
+ */
+bool malatom_equal(const MalAtom *a, const MalAtom *b);
+
 typedef struct MalVector {
   int size;
   int capacity;
@@ -153,9 +165,8 @@ int malvector_pop(MalVector *vector);
 const MalAtom *malvector_get(const MalVector *vector, const int index);
 
 typedef struct MalHashentry {
-  char *key;
-  void *value;
-  void (*free_value)(void *);
+  MalAtom *key;
+  MalAtom *value;
   int psl;
   struct MalHashentry *next;
 } MalHashentry;
@@ -166,14 +177,12 @@ typedef struct MalHashentry {
  * Parameters:
  * - key: Key of MalHashentry. Takes ownership from caller.
  * - value: Value of MalHashentry. Takes ownership from caller.
- * - free_value: Function to free value.
  *
  * Returns:
  * - New MalHashentry struct. Caller takes ownership.
  *   Must be freed later with malhashentry_free().
  */
-MalHashentry *malhashentry_new(char *key, void *value,
-                               void (*free_value)(void *));
+MalHashentry *malhashentry_new(MalAtom *key, MalAtom *value);
 
 /**
  * Frees memory for a MalHashentry.
@@ -224,13 +233,11 @@ void malhashmap_free(MalHashmap *hashmap);
  * - hashmap: MalHashmap to insert value into. Caller retains ownership.
  * - key: Key to insert value at. Takes ownership from caller.
  * - value: Value to insert. Takes ownership from caller.
- * - free_value: Function to free value.
  *
  * Returns:
  * - 0 on success, 1 on failure to insert value.
  */
-int malhashmap_insert(MalHashmap *hashmap, char *key, void *value,
-                      void (*free_value)(void *));
+int malhashmap_insert(MalHashmap *hashmap, MalAtom *key, MalAtom *value);
 
 /**
  * Get a value from a MalHashmap at a given key.
@@ -242,7 +249,7 @@ int malhashmap_insert(MalHashmap *hashmap, char *key, void *value,
  * Returns:
  * - Value at key. Caller does NOT take ownership.
  */
-const void *malhashmap_get(const MalHashmap *hashmap, const char *key);
+const MalAtom *malhashmap_get(const MalHashmap *hashmap, const MalAtom *key);
 
 /**
  * Resize a MalHashmap.

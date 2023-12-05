@@ -46,8 +46,7 @@ MalAtom *eval_ast(MalAtom *ast, const MalHashmap *repl_env) {
 
   switch (ast->type) {
   case MAL_SYMBOL: {
-    const MalAtom *value =
-        (const MalAtom *)malhashmap_get(repl_env, ast->value.symbol);
+    const MalAtom *value = malhashmap_get(repl_env, ast);
     malatom_free(ast);
     if (value == NULL) {
       fprintf(stderr, "Symbol not found: %s\n", ast->value.symbol);
@@ -276,37 +275,62 @@ MalAtom *divide(const MalAtom *args) {
 char *rep(const char *str) {
   MalHashmap *repl_env = malhashmap_new(DEFAULT_CONTAINER_CAPACITY);
 
-  char *plus_str = strdup("+");
+  MalAtom *plus_str = malatom_new(MAL_SYMBOL);
+  if (plus_str == NULL) {
+    malhashmap_free(repl_env);
+    return NULL;
+  }
+  plus_str->value.symbol = strdup("+");
   MalAtom *plus_atom = malatom_new(MAL_FUNCTION);
+  if (plus_atom == NULL) {
+    malatom_free(plus_str);
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   plus_atom->value.function = (void *(*)(void *))plus;
-  malhashmap_insert(repl_env, plus_str, plus_atom,
-                    (void (*)(void *))malatom_free);
-  plus_str = NULL;
-  plus_atom = NULL;
+  malhashmap_insert(repl_env, plus_str, plus_atom);
 
-  char *minus_str = strdup("-");
+  MalAtom *minus_str = malatom_new(MAL_SYMBOL);
+  if (minus_str == NULL) {
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   MalAtom *minus_atom = malatom_new(MAL_FUNCTION);
+  if (minus_atom == NULL) {
+    malatom_free(minus_str);
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   minus_atom->value.function = (void *(*)(void *))minus;
-  malhashmap_insert(repl_env, minus_str, minus_atom,
-                    (void (*)(void *))malatom_free);
-  minus_str = NULL;
-  minus_atom = NULL;
+  malhashmap_insert(repl_env, minus_str, minus_atom);
 
-  char *multiply_str = strdup("*");
+  MalAtom *multiply_str = malatom_new(MAL_SYMBOL);
+  if (multiply_str == NULL) {
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   MalAtom *multiply_atom = malatom_new(MAL_FUNCTION);
+  if (multiply_atom == NULL) {
+    malatom_free(multiply_str);
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   multiply_atom->value.function = (void *(*)(void *))multiply;
-  malhashmap_insert(repl_env, multiply_str, multiply_atom,
-                    (void (*)(void *))malatom_free);
-  multiply_str = NULL;
-  multiply_atom = NULL;
+  malhashmap_insert(repl_env, multiply_str, multiply_atom);
 
-  char *divide_str = strdup("/");
+  MalAtom *divide_str = malatom_new(MAL_SYMBOL);
+  if (divide_str == NULL) {
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   MalAtom *divide_atom = malatom_new(MAL_FUNCTION);
+  if (divide_atom == NULL) {
+    malatom_free(divide_str);
+    malhashmap_free(repl_env);
+    return NULL;
+  }
   divide_atom->value.function = (void *(*)(void *))divide;
-  malhashmap_insert(repl_env, divide_str, divide_atom,
-                    (void (*)(void *))malatom_free);
-  divide_str = NULL;
-  divide_atom = NULL;
+  malhashmap_insert(repl_env, divide_str, divide_atom);
 
   char *result = PRINT(EVAL(READ(str), repl_env));
   malhashmap_free(repl_env);
